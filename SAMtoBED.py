@@ -9,15 +9,62 @@ import sys
 import re
 
 def usage():
-  print "Usage: python SAMtoBED.py  [options]  <input>  <output>  \n\
-    <input>     SAM file, or '-' for stdin                        \n\
-    <output>    BED file                                          \n\
-  Options for unpaired alignments:                                \n\
-    -n        Do not print unpaired alignments (default)          \n\
-    -y        Print unpaired alignments                           \n\
-    -a <int>  Print unpaired alignments, with read length         \n\
-                increased to specified value                       "
+  sys.stderr.write('''Usage: python SAMtoBED.py  [options]  -i <input>  -o <output>
+    -i <input>    SAM alignment file (can be in any sort order,
+                    or unsorted; use '-' for stdin)
+    -o <output>   Output BED file
+  Options for unpaired alignments:
+    -n            Do not print unpaired alignments (default)
+    -y            Print unpaired alignments
+    -a <int>      Print unpaired alignments, with read length
+                    increased to specified value
+''')
   sys.exit(-1)
+
+def openRead(filename):
+  '''
+  Open filename for reading. '-' indicates stdin.
+    '.gz' suffix indicates gzip compression.
+  '''
+  if filename == '-':
+    return sys.stdin
+  try:
+    if filename[-3:] == '.gz':
+      f = gzip.open(filename, 'rb')
+    else:
+      f = open(filename, 'rU')
+  except IOError:
+    sys.stderr.write('Error! Cannot read input file %s\n' % filename)
+    sys.exit(-1)
+  return f
+
+def openWrite(filename):
+  '''
+  Open filename for writing. '-' indicates stdout.
+    '.gz' suffix indicates gzip compression.
+  '''
+  if filename == '-':
+    return sys.stdout
+  try:
+    if filename[-3:] == '.gz':
+      f = gzip.open(filename, 'wb')
+    else:
+      f = open(filename, 'w')
+  except IOError:
+    sys.stderr.write('Error! Cannot write to output file %s\n' % filename)
+    sys.exit(-1)
+  return f
+
+def getInt(arg):
+  '''
+  Convert given argument to int.
+  '''
+  try:
+    val = int(arg)
+  except ValueError:
+    sys.stderr.write('Error! Cannot convert %s to int\n' % arg)
+    sys.exit(-1)
+  return val
 
 def loadChrLen(line, chr):
   '''
@@ -93,22 +140,22 @@ def processPaired(spl, flag, start, offset, pos, chr, fOut):
     else:
       pos[spl[0]] = start
 
-def processUnpaired(spl, flag, start, offset, pos, chr, fOut, add):
+def processUnpaired(spl, flag, start, offset, pos, chr, fOut, addBP):
   '''
   Process an unpaired SAM record.
   '''
-  # adjust ends (using parameter 'add')
+  # adjust ends (using parameter 'addBP')
   end = start + offset + len(spl[9])
-  if add != 0:
+  if addBP != 0:
     if flag & 0x10:
-      start = min(end - add, start)
+      start = min(end - addBP, start)
     else:
-      end = max(start + add, end)
+      end = max(start + addBP, end)
 
   writeOut(fOut, spl[2], start, end, spl[0], chr)
   pos[spl[0]] = -2  # records that read was processed
 
-def parseSAM(fIn, fOut, add):
+def parseSAM(fIn, fOut, singleOpt, addBP):
   '''
   Parse the input file, and produce the output file.
   '''
@@ -126,14 +173,10 @@ def parseSAM(fIn, fOut, add):
     # save flag and start position
     spl = line.split('\t')
     if len(spl) < 11:
-      print 'Error! Poorly formatted SAM record:\n', line
+      sys.stderr.write('Error! Poorly formatted SAM record:\n' + line)
       sys.exit(-1)
-    try:
-      flag = int(spl[1])
-      start = int(spl[3]) - 1
-    except ValueError:
-      print 'Error parsing SAM record:\n', line
-      sys.exit(-1)
+    flag = getInt(spl[1])
+    start = getInt(spl[3]) - 1
 
     # skip unmapped, secondary, and supplementary
     if flag & 0x904:
@@ -144,8 +187,8 @@ def parseSAM(fIn, fOut, add):
     offset = parseCigar(spl[5])
     if flag & 0x2:
       processPaired(spl, flag, start, offset, pos, chr, fOut)
-    elif add != -1:
-      processUnpaired(spl, flag, start, offset, pos, chr, fOut, add)
+    elif singleOpt:
+      processUnpaired(spl, flag, start, offset, pos, chr, fOut, addBP)
 
     line = fIn.readline().rstrip()
 
@@ -156,41 +199,57 @@ def parseSAM(fIn, fOut, add):
 
 def main():
   '''
-  Runs the program.
+  Main.
   '''
-  # parse command-line args
+  # Default parameters
+  infile = None      # input file
+  outfile = None     # output file
+  singleOpt = False  # option to print unpaired alignments
+  addBP = 0          # number of bp to add to unpaired reads
+  verbose = False    # verbose option
+
+  # get command-line args
   args = sys.argv[1:]
-  if not args: usage()
-  add = -1  # number of bp to add to unpaired reads
   i = 0
-  if args[i] == '-y':
-    add = 0
-    i += 1
-  elif args[i] == '-a':
-    try:
-      add = int(args[i+1])
-    except ValueError:
-      print 'Error! Cannot convert %s to int' % args[i+1]
-      sys.exit(-1)
-    i += 2
-  elif args[i] == '-n':
-    i += 1
-
-  # open files
-  if len(args[i:]) < 2: usage()
-  try:
-    fIn = open(args[i], 'rU')
-  except IOError:
-    if args[i] == '-':
-      fIn = sys.stdin
-    else:
-      print 'Error! Cannot open', args[i]
+  while i < len(args):
+    if args[i] == '-h' or args[i] == '--help':
       usage()
-  fOut = open(args[i+1], 'w')
+    elif args[i] == '--version':
+      pass  #printVersion()
+    elif args[i] == '-v':
+      verbose = True
+    elif args[i] == '-n':
+      singleOpt = False
+    elif args[i] == '-y':
+      singleOpt = True
+    elif i < len(args) - 1:
+      if args[i] == '-i':
+        infile = openRead(args[i+1])
+      elif args[i] == '-o':
+        outfile = openWrite(args[i+1])
+      elif args[i] == '-a':
+        singleOpt = True
+        addBP = max(getInt(args[i+1]), 0)
+      else:
+        sys.stderr.write('Error! Unknown parameter: %s\n' % args[i])
+        usage()
+      i += 1
+    else:
+      sys.stderr.write('Error! Unknown parameter with no arg: ' \
+        + '%s\n' % args[i])
+      usage()
+    i += 1
 
-  parseSAM(fIn, fOut, add)
-  fIn.close()
-  fOut.close()
+  # check for I/O errors
+  if infile == None or outfile == None:
+    sys.stderr.write('Error! Must specify input and output files\n')
+    usage()
+
+  parseSAM(infile, outfile, singleOpt, addBP)
+  if infile != sys.stdin:
+    infile.close()
+  if outfile != sys.stdout:
+    outfile.close()
 
 if __name__ == '__main__':
   main()
