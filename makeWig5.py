@@ -75,8 +75,8 @@ def main():
     nextLine = fIn.readline()
     if nextLine and nextLine.split('\t')[0] == chrom:
       dist = int(nextLine.split('\t')[1]) - start
-    else:
-      dist = step  # avoids writing new header for last interval of chromosomes
+    #else:
+    #  dist = step  # avoids writing new header for last interval of chromosomes
 
     # initialize new region, if necessary
     #if newReg or dist != step or length != span:

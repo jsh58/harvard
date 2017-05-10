@@ -18,6 +18,8 @@ def usage():
     -y            Print unpaired alignments
     -a <int>      Print unpaired alignments, with read length
                     increased to specified value
+  Other options:
+    -v            Run in verbose mode
 ''')
   sys.exit(-1)
 
@@ -87,34 +89,38 @@ def parseCigar(cigar):
     offset += int(d)
   return offset
 
-def writeOut(fOut, ref, start, end, read, chr):
+def writeOut(fOut, ref, start, end, read, chr, verbose):
   '''
   Write BED output. Adjust any read that extends beyond
     chromosome ends.
   '''
   if start < 0:
     start = 0
-    sys.stderr.write('Warning! Read %s prevented from ' % read + \
-      'extending below 0 on %s\n' % ref)
+    if verbose:
+      sys.stderr.write('Warning! Read %s prevented ' % read \
+        + 'from extending below 0 on %s\n' % ref)
   if ref in chr and end > chr[ref]:
     end = chr[ref]
-    sys.stderr.write('Warning! Read %s prevented from ' % read + \
-      'extending past %d on %s\n' % (chr[ref], ref))
+    if verbose:
+      sys.stderr.write('Warning! Read %s prevented ' % read \
+        + 'from extending past %d on %s\n' % (chr[ref], ref))
   fOut.write('%s\t%d\t%d\t%s\n' % \
     (ref, start, end, read))
 
-def checkPaired(pos):
+def checkPaired(pos, verbose):
   '''
   Check if paired alignments weren't processed.
   '''
   unpaired = 0
   for r in pos:
     if pos[r] >= 0:
-      sys.stderr.write('Error! Read %s missing its pair\n' % r)
+      if verbose:
+        sys.stderr.write('Warning! Read %s missing its pair\n' % r)
       unpaired += 1
   return unpaired
 
-def processPaired(spl, flag, start, offset, pos, chr, fOut):
+def processPaired(spl, flag, start, offset, pos, chr,
+    fOut, verbose):
   '''
   Process a properly paired SAM record.
   '''
@@ -129,7 +135,7 @@ def processPaired(spl, flag, start, offset, pos, chr, fOut):
       start += offset + len(spl[9])
 
     writeOut(fOut, spl[2], min(start, pos[spl[0]]), \
-      max(start, pos[spl[0]]), spl[0], chr)
+      max(start, pos[spl[0]]), spl[0], chr, verbose)
 
     pos[spl[0]] = -1  # records that read was processed
 
@@ -140,7 +146,8 @@ def processPaired(spl, flag, start, offset, pos, chr, fOut):
     else:
       pos[spl[0]] = start
 
-def processUnpaired(spl, flag, start, offset, pos, chr, fOut, addBP):
+def processUnpaired(spl, flag, start, offset, pos, chr,
+    fOut, addBP, verbose):
   '''
   Process an unpaired SAM record.
   '''
@@ -152,10 +159,10 @@ def processUnpaired(spl, flag, start, offset, pos, chr, fOut, addBP):
     else:
       end = max(start + addBP, end)
 
-  writeOut(fOut, spl[2], start, end, spl[0], chr)
+  writeOut(fOut, spl[2], start, end, spl[0], chr, verbose)
   pos[spl[0]] = -2  # records that read was processed
 
-def parseSAM(fIn, fOut, singleOpt, addBP):
+def parseSAM(fIn, fOut, singleOpt, addBP, verbose):
   '''
   Parse the input file, and produce the output file.
   '''
@@ -173,7 +180,8 @@ def parseSAM(fIn, fOut, singleOpt, addBP):
     # save flag and start position
     spl = line.split('\t')
     if len(spl) < 11:
-      sys.stderr.write('Error! Poorly formatted SAM record:\n' + line)
+      sys.stderr.write('Error! Poorly formatted SAM record:\n' \
+        + line)
       sys.exit(-1)
     flag = getInt(spl[1])
     start = getInt(spl[3]) - 1
@@ -186,15 +194,17 @@ def parseSAM(fIn, fOut, singleOpt, addBP):
     # process alignment
     offset = parseCigar(spl[5])
     if flag & 0x2:
-      processPaired(spl, flag, start, offset, pos, chr, fOut)
+      processPaired(spl, flag, start, offset, pos,
+        chr, fOut, verbose)
     elif singleOpt:
-      processUnpaired(spl, flag, start, offset, pos, chr, fOut, addBP)
+      processUnpaired(spl, flag, start, offset, pos,
+        chr, fOut, addBP, verbose)
 
     line = fIn.readline().rstrip()
 
   # check paired alignments that weren't processed
-  unpaired = checkPaired(pos)
-  if unpaired:
+  unpaired = checkPaired(pos, verbose)
+  if unpaired and verbose:
     sys.stderr.write('Reads lacking pairs: %d\n' % unpaired)
 
 def main():
@@ -245,7 +255,7 @@ def main():
     sys.stderr.write('Error! Must specify input and output files\n')
     usage()
 
-  parseSAM(infile, outfile, singleOpt, addBP)
+  parseSAM(infile, outfile, singleOpt, addBP, verbose)
   if infile != sys.stdin:
     infile.close()
   if outfile != sys.stdout:
