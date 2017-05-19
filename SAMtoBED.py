@@ -16,8 +16,11 @@ def usage():
   Options for unpaired alignments:
     -n            Do not print unpaired alignments (default)
     -y            Print unpaired alignments
-    -a <int>      Print unpaired alignments, with read length
+    -a <int>      Print unpaired alignments, with fragment length
                     increased to specified value
+    -x            Print unpaired alignments, with fragment length
+                    increased to average value calculated from
+                    paired alignments
   Other options:
     -v            Run in verbose mode
 ''')
@@ -120,7 +123,7 @@ def checkPaired(pos, verbose):
   return unpaired
 
 def processPaired(spl, flag, start, offset, pos, chr,
-    fOut, verbose):
+    fOut, extendOpt, length, verbose):
   '''
   Process a properly paired SAM record.
   '''
@@ -136,6 +139,10 @@ def processPaired(spl, flag, start, offset, pos, chr,
 
     writeOut(fOut, spl[2], min(start, pos[spl[0]]), \
       max(start, pos[spl[0]]), spl[0], chr, verbose)
+
+    # keep track of fragment lengths
+    length[0] += 1
+    length[1] += abs(start - pos[spl[0]])
 
     pos[spl[0]] = -1  # records that read was processed
 
@@ -162,12 +169,38 @@ def processUnpaired(spl, flag, start, offset, pos, chr,
   writeOut(fOut, spl[2], start, end, spl[0], chr, verbose)
   pos[spl[0]] = -2  # records that read was processed
 
-def parseSAM(fIn, fOut, singleOpt, addBP, verbose):
+def processSingle(single, pos, chr, fOut, length, verbose):
+  '''
+  Process saved singletons (unpaired alignments)
+    using calculated extension size.
+  '''
+  if length[0] == 0:
+    sys.stderr.write('Error! Cannot calculate fragment ' \
+      + 'lengths: no paired alignments\n')
+    sys.exit(-1)
+
+  avg = int(round(length[1] / length[0]))
+  count = 0
+  for s in single:
+    for idx in range(len(single[s])):
+      spl = single[s][idx]
+      flag = getInt(spl[1])
+      start = getInt(spl[3]) - 1
+      offset = parseCigar(spl[5])
+      processUnpaired(spl, flag, start, offset, pos,
+        chr, fOut, avg, verbose)
+      count += 1
+  return count
+
+def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt, verbose):
   '''
   Parse the input file, and produce the output file.
   '''
   chr = {}  # chromosome lengths
-  pos = {}  # position of alignment (for paired reads)
+  pos = {}  # position of first alignment (for paired reads)
+  single = {}  # to save unpaired alignments (for calc.-extension option)
+  count = 0    # count of unpaired alignments
+  length = [0, 0.0]  # for calculating fragment lengths
   line = fIn.readline().rstrip()
   while line:
 
@@ -194,18 +227,49 @@ def parseSAM(fIn, fOut, singleOpt, addBP, verbose):
     # process alignment
     offset = parseCigar(spl[5])
     if flag & 0x2:
+      # properly paired alignment
       processPaired(spl, flag, start, offset, pos,
-        chr, fOut, verbose)
+        chr, fOut, extendOpt, length, verbose)
+
+    elif extendOpt:
+      # with calculated-extension option, save unpaired alignments
+      #   until after extension length is calculated
+      if spl[0] in single:
+        single[spl[0]].append(spl)
+      else:
+        single[spl[0]] = [spl]
+      pos[spl[0]] = -2  # records that read was processed
+
     elif singleOpt:
+      # process singletons directly (w/o extendOpt)
       processUnpaired(spl, flag, start, offset, pos,
         chr, fOut, addBP, verbose)
+      count += 1
 
     line = fIn.readline().rstrip()
 
-  # check paired alignments that weren't processed
+  # check for paired alignments that weren't processed
   unpaired = checkPaired(pos, verbose)
-  if unpaired and verbose:
-    sys.stderr.write('Reads lacking pairs: %d\n' % unpaired)
+
+  # for calculated-extension option, process saved unpaired alns
+  if extendOpt:
+    count = processSingle(single, pos, chr, fOut, length, verbose)
+
+  # log counts
+  if verbose:
+    sys.stderr.write('Paired alignments (fragments): ' \
+      + '%d (%d)\n' % (length[0]*2, length[0]))
+    if length[0]:
+      sys.stderr.write('  Average fragment length: %.1fbp\n' \
+        % ( length[1] / length[0] ))
+    if unpaired:
+      sys.stderr.write('"Paired" reads missing mates: %d\n' % unpaired)
+    if singleOpt or extendOpt:
+      sys.stderr.write('Unpaired alignments: %d\n' % count)
+      if extendOpt:
+        addBP = int(round(length[1] / length[0]))
+      if addBP:
+        sys.stderr.write('  (extended to length %dbp)\n' % addBP)
 
 def main():
   '''
@@ -216,6 +280,7 @@ def main():
   outfile = None     # output file
   singleOpt = False  # option to print unpaired alignments
   addBP = 0          # number of bp to add to unpaired reads
+  extendOpt = False  # option to calculate extension size
   verbose = False    # verbose option
 
   # get command-line args
@@ -232,6 +297,8 @@ def main():
       singleOpt = False
     elif args[i] == '-y':
       singleOpt = True
+    elif args[i] == '-x':
+      extendOpt = True
     elif i < len(args) - 1:
       if args[i] == '-i':
         infile = openRead(args[i+1])
@@ -255,7 +322,7 @@ def main():
     sys.stderr.write('Error! Must specify input and output files\n')
     usage()
 
-  parseSAM(infile, outfile, singleOpt, addBP, verbose)
+  parseSAM(infile, outfile, singleOpt, addBP, extendOpt, verbose)
   if infile != sys.stdin:
     infile.close()
   if outfile != sys.stdout:
