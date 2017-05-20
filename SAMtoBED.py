@@ -107,12 +107,11 @@ def writeOut(fOut, ref, start, end, read, chr, verbose):
     if verbose:
       sys.stderr.write('Warning! Read %s prevented ' % read \
         + 'from extending past %d on %s\n' % (chr[ref], ref))
-  fOut.write('%s\t%d\t%d\t%s\n' % \
-    (ref, start, end, read))
+  fOut.write('%s\t%d\t%d\t%s\n' % (ref, start, end, read))
 
 def checkPaired(pos, verbose):
   '''
-  Check if paired alignments weren't processed.
+  Check if any paired alignments weren't processed.
   '''
   unpaired = 0
   for r in pos:
@@ -122,52 +121,53 @@ def checkPaired(pos, verbose):
       unpaired += 1
   return unpaired
 
-def processPaired(spl, flag, start, offset, pos, chr,
-    fOut, extendOpt, length, verbose):
+def processPaired(header, chrom, rc, start, offset, pos,
+    chr, fOut, extendOpt, length, verbose):
   '''
-  Process a properly paired SAM record.
+  Process a properly paired SAM record. If first, save end
+    position to pos dict; if second, write complete record.
   '''
   # 2nd of PE reads
-  if spl[0] in pos:
-    if pos[spl[0]] < 0:
-      sys.stderr.write('Error! Read %s already analyzed\n' % spl[0])
+  if header in pos:
+    if pos[header] < 0:
+      sys.stderr.write('Error! Read %s already analyzed\n' % header)
       sys.exit(-1)
 
     # save end position
-    if flag & 0x10:
-      start += offset + len(spl[9])
+    if rc:
+      start += offset
 
-    writeOut(fOut, spl[2], min(start, pos[spl[0]]), \
-      max(start, pos[spl[0]]), spl[0], chr, verbose)
+    writeOut(fOut, chrom, min(start, pos[header]), \
+      max(start, pos[header]), header, chr, verbose)
 
     # keep track of fragment lengths
     length[0] += 1
-    length[1] += abs(start - pos[spl[0]])
+    length[1] += abs(start - pos[header])
 
-    pos[spl[0]] = -1  # records that read was processed
+    pos[header] = -1  # records that read was processed
 
   # 1st of PE reads: save end position
   else:
-    if flag & 0x10:
-      pos[spl[0]] = start + offset + len(spl[9])
+    if rc:
+      pos[header] = start + offset
     else:
-      pos[spl[0]] = start
+      pos[header] = start
 
-def processUnpaired(spl, flag, start, offset, pos, chr,
-    fOut, addBP, verbose):
+def processUnpaired(header, chrom, rc, start, offset, pos,
+    chr, fOut, addBP, verbose):
   '''
   Process an unpaired SAM record.
   '''
-  # adjust ends (using parameter 'addBP')
-  end = start + offset + len(spl[9])
+  # extend 3' end of read (to total length 'addBP')
+  end = start + offset
   if addBP != 0:
-    if flag & 0x10:
+    if rc:
       start = min(end - addBP, start)
     else:
       end = max(start + addBP, end)
 
-  writeOut(fOut, spl[2], start, end, spl[0], chr, verbose)
-  pos[spl[0]] = -2  # records that read was processed
+  writeOut(fOut, chrom, start, end, header, chr, verbose)
+  pos[header] = -2  # records that read was processed
 
 def processSingle(single, pos, chr, fOut, length, verbose):
   '''
@@ -179,16 +179,16 @@ def processSingle(single, pos, chr, fOut, length, verbose):
       + 'lengths: no paired alignments\n')
     sys.exit(-1)
 
+  # calculate average paired alignment length
   avg = int(round(length[1] / length[0]))
+
+  # process reads
   count = 0
-  for s in single:
-    for idx in range(len(single[s])):
-      spl = single[s][idx]
-      flag = getInt(spl[1])
-      start = getInt(spl[3]) - 1
-      offset = parseCigar(spl[5])
-      processUnpaired(spl, flag, start, offset, pos,
-        chr, fOut, avg, verbose)
+  for header in single:
+    for idx in range(len(single[header])):
+      chrom, rc, start, offset = single[header][idx]
+      processUnpaired(header, chrom, rc, start, offset,
+        pos, chr, fOut, avg, verbose)
       count += 1
   return count
 
@@ -225,25 +225,25 @@ def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt, verbose):
       continue
 
     # process alignment
-    offset = parseCigar(spl[5])
+    offset = parseCigar(spl[5]) + len(spl[9])
     if flag & 0x2:
       # properly paired alignment
-      processPaired(spl, flag, start, offset, pos,
-        chr, fOut, extendOpt, length, verbose)
+      processPaired(spl[0], spl[2], flag & 0x10, start, offset,
+        pos, chr, fOut, extendOpt, length, verbose)
 
     elif extendOpt:
       # with calculated-extension option, save unpaired alignments
       #   until after extension length is calculated
       if spl[0] in single:
-        single[spl[0]].append(spl)
+        single[spl[0]].append((spl[2], flag & 0x10, start, offset))
       else:
-        single[spl[0]] = [spl]
+        single[spl[0]] = [(spl[2], flag & 0x10, start, offset)]
       pos[spl[0]] = -2  # records that read was processed
 
     elif singleOpt:
       # process singletons directly (w/o extendOpt)
-      processUnpaired(spl, flag, start, offset, pos,
-        chr, fOut, addBP, verbose)
+      processUnpaired(spl[0], spl[2], flag & 0x10, start,
+        offset, pos, chr, fOut, addBP, verbose)
       count += 1
 
     line = fIn.readline().rstrip()
@@ -322,6 +322,7 @@ def main():
     sys.stderr.write('Error! Must specify input and output files\n')
     usage()
 
+  # process files
   parseSAM(infile, outfile, singleOpt, addBP, extendOpt, verbose)
   if infile != sys.stdin:
     infile.close()
