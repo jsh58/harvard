@@ -1,12 +1,28 @@
 #!/usr/bin/python
 
-# JMG 4/13/16
+# John M. Gaspar (jsh58@wildcats.unh.edu)
+# May 2017
 
-# Produce a BED file from a SAM.
-# Combine paired-end alignments.
+# This script converts a SAM file to BED format.
+#   It combines "properly paired" alignments into
+#   a single BED interval.  There are options to
+#   include unpaired alignments in the output,
+#   and they can be extended to a specified or a
+#   calculated length.
+# The input SAM can be in any sort order, or
+#   unsorted.  A BAM can be piped in via
+#   'samtools view', e.g.:
+# $ samtools view -h <BAM> | python SAMtoBED.py -i - -o <BED>
 
 import sys
 import re
+version = '0.1'
+copyright = 'Copyright (C) 2017 John M. Gaspar (jsh58@wildcats.unh.edu)'
+
+def printVersion():
+  sys.stderr.write('SAMtoBED.py, version %s\n' % version)
+  sys.stderr.write(copyright + '\n')
+  sys.exit(-1)
 
 def usage():
   sys.stderr.write('''Usage: python SAMtoBED.py  [options]  -i <input>  -o <output>
@@ -22,6 +38,7 @@ def usage():
                     increased to average value calculated from
                     paired alignments
   Other options:
+    -s            Option to produce sorted output
     -v            Run in verbose mode
 ''')
   sys.exit(-1)
@@ -71,13 +88,14 @@ def getInt(arg):
     sys.exit(-1)
   return val
 
-def loadChrLen(line, chr):
+def loadChrLen(line, chr, chrOrder):
   '''
   Load chromosome lengths from the SAM file header.
   '''
   mat = re.search(r'@SQ\s+SN:(\S+)\s+LN:(\d+)', line)
   if mat:
     chr[mat.group(1)] = int(mat.group(2))
+    chrOrder.append(mat.group(1))
 
 def parseCigar(cigar):
   '''
@@ -109,6 +127,16 @@ def writeOut(fOut, ref, start, end, read, chr, verbose):
         + 'from extending past %d on %s\n' % (chr[ref], ref))
   fOut.write('%s\t%d\t%d\t%s\n' % (ref, start, end, read))
 
+def writeSorted(fOut, res, chrOrder, chr, verbose):
+  '''
+  Sort output.
+  '''
+  if not chrOrder:
+    chrOrder = sorted(res.keys())
+  for chrom in chrOrder:
+    for k in sorted(res[chrom]):
+      writeOut(fOut, chrom, k[0], k[1], k[2], chr, verbose)
+
 def checkPaired(pos, verbose):
   '''
   Check if any paired alignments weren't processed.
@@ -121,8 +149,26 @@ def checkPaired(pos, verbose):
       unpaired += 1
   return unpaired
 
+def saveResult(res, chrom, start, end, header, chr, verbose):
+  '''
+  Save BED record to dict, for later sorting.
+  '''
+  if chrom not in res:
+    res[chrom] = list()
+  if start < 0:
+    start = 0
+    if verbose:
+      sys.stderr.write('Warning! Read %s prevented ' % header \
+        + 'from extending below 0 on %s\n' % chrom)
+  if chrom in chr and end > chr[chrom]:
+    end = chr[chrom]
+    if verbose:
+      sys.stderr.write('Warning! Read %s prevented ' % header \
+        + 'from extending past %d on %s\n' % (chr[chrom], chrom))
+  res[chrom].append((start, end, header))
+
 def processPaired(header, chrom, rc, start, offset, pos,
-    chr, fOut, extendOpt, length, verbose):
+    chr, fOut, extendOpt, length, sortOpt, res, verbose):
   '''
   Process a properly paired SAM record. If first, save end
     position to pos dict; if second, write complete record.
@@ -137,8 +183,13 @@ def processPaired(header, chrom, rc, start, offset, pos,
     if rc:
       start += offset
 
-    writeOut(fOut, chrom, min(start, pos[header]), \
-      max(start, pos[header]), header, chr, verbose)
+    # save/write result
+    if sortOpt:
+      saveResult(res, chrom, min(start, pos[header]), \
+        max(start, pos[header]), header, chr, verbose)
+    else:
+      writeOut(fOut, chrom, min(start, pos[header]), \
+        max(start, pos[header]), header, chr, verbose)
 
     # keep track of fragment lengths
     length[0] += 1
@@ -154,7 +205,7 @@ def processPaired(header, chrom, rc, start, offset, pos,
       pos[header] = start
 
 def processUnpaired(header, chrom, rc, start, offset, pos,
-    chr, fOut, addBP, verbose):
+    chr, fOut, addBP, sortOpt, res, verbose):
   '''
   Process an unpaired SAM record.
   '''
@@ -166,10 +217,15 @@ def processUnpaired(header, chrom, rc, start, offset, pos,
     else:
       end = max(start + addBP, end)
 
-  writeOut(fOut, chrom, start, end, header, chr, verbose)
+  # save/write result
+  if sortOpt:
+    saveResult(res, chrom, start, end, header, chr, verbose)
+  else:
+    writeOut(fOut, chrom, start, end, header, chr, verbose)
   pos[header] = -2  # records that read was processed
 
-def processSingle(single, pos, chr, fOut, length, verbose):
+def processSingle(single, pos, chr, fOut, length,
+    sortOpt, res, verbose):
   '''
   Process saved singletons (unpaired alignments)
     using calculated extension size.
@@ -188,11 +244,12 @@ def processSingle(single, pos, chr, fOut, length, verbose):
     for idx in range(len(single[header])):
       chrom, rc, start, offset = single[header][idx]
       processUnpaired(header, chrom, rc, start, offset,
-        pos, chr, fOut, avg, verbose)
+        pos, chr, fOut, avg, sortOpt, res, verbose)
       count += 1
   return count
 
-def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt, verbose):
+def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt,
+    sortOpt, verbose):
   '''
   Parse the input file, and produce the output file.
   '''
@@ -201,12 +258,15 @@ def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt, verbose):
   single = {}  # to save unpaired alignments (for calc.-extension option)
   count = 0    # count of unpaired alignments
   length = [0, 0.0]  # for calculating fragment lengths
+  res = {}  # to save results, for sorted output
+  chrOrder = []  # to save chromosome order, for sorted output
+
   line = fIn.readline().rstrip()
   while line:
 
     # skip header
     if line[0] == '@':
-      loadChrLen(line, chr)  # load chromosome length
+      loadChrLen(line, chr, chrOrder)  # load chromosome length
       line = fIn.readline().rstrip()
       continue
 
@@ -229,7 +289,7 @@ def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt, verbose):
     if flag & 0x2:
       # properly paired alignment
       processPaired(spl[0], spl[2], flag & 0x10, start, offset,
-        pos, chr, fOut, extendOpt, length, verbose)
+        pos, chr, fOut, extendOpt, length, sortOpt, res, verbose)
 
     elif extendOpt:
       # with calculated-extension option, save unpaired alignments
@@ -243,7 +303,7 @@ def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt, verbose):
     elif singleOpt:
       # process singletons directly (w/o extendOpt)
       processUnpaired(spl[0], spl[2], flag & 0x10, start,
-        offset, pos, chr, fOut, addBP, verbose)
+        offset, pos, chr, fOut, addBP, sortOpt, res, verbose)
       count += 1
 
     line = fIn.readline().rstrip()
@@ -253,7 +313,12 @@ def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt, verbose):
 
   # for calculated-extension option, process saved unpaired alns
   if extendOpt:
-    count = processSingle(single, pos, chr, fOut, length, verbose)
+    count = processSingle(single, pos, chr, fOut, length,
+      sortOpt, res, verbose)
+
+  # produce sorted output
+  if sortOpt:
+    writeSorted(fOut, res, chrOrder, chr, verbose)
 
   # log counts
   if verbose:
@@ -281,6 +346,7 @@ def main():
   singleOpt = False  # option to print unpaired alignments
   addBP = 0          # number of bp to add to unpaired reads
   extendOpt = False  # option to calculate extension size
+  sortOpt = False    # option to produce sorted output
   verbose = False    # verbose option
 
   # get command-line args
@@ -290,7 +356,7 @@ def main():
     if args[i] == '-h' or args[i] == '--help':
       usage()
     elif args[i] == '--version':
-      pass  #printVersion()
+      printVersion()
     elif args[i] == '-v':
       verbose = True
     elif args[i] == '-n':
@@ -299,6 +365,8 @@ def main():
       singleOpt = True
     elif args[i] == '-x':
       extendOpt = True
+    elif args[i] == '-s':
+      sortOpt = True
     elif i < len(args) - 1:
       if args[i] == '-i':
         infile = openRead(args[i+1])
@@ -323,7 +391,8 @@ def main():
     usage()
 
   # process files
-  parseSAM(infile, outfile, singleOpt, addBP, extendOpt, verbose)
+  parseSAM(infile, outfile, singleOpt, addBP, extendOpt,
+    sortOpt, verbose)
   if infile != sys.stdin:
     infile.close()
   if outfile != sys.stdout:
