@@ -97,18 +97,18 @@ def loadChrLen(line, chr, chrOrder):
     chr[mat.group(1)] = int(mat.group(2))
     chrOrder.append(mat.group(1))
 
-def parseCigar(cigar):
+def parseCigar(cigar, length):
   '''
-  Determine indel offset of alignment from CIGAR.
+  Determine distance to 3' end of aligned fragment
+    (accounting for D/I/S in CIGAR).
   '''
-  offset = 0
-  ins = re.findall(r'(\d+)I', cigar)
-  for i in ins:
-    offset -= int(i)
-  de = re.findall(r'(\d+)D', cigar)
-  for d in de:
-    offset += int(d)
-  return offset
+  ops = re.findall(r'(\d+)([DIS])', cigar)
+  for op in ops:
+    if op[1] == 'D':
+      length += int(op[0])
+    else:
+      length -= int(op[0])
+  return length
 
 def writeOut(fOut, ref, start, end, read, chr, verbose):
   '''
@@ -285,7 +285,7 @@ def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt,
       continue
 
     # process alignment
-    offset = parseCigar(spl[5]) + len(spl[9])
+    offset = parseCigar(spl[5], len(spl[9]))
     if flag & 0x2:
       # properly paired alignment
       processPaired(spl[0], spl[2], flag & 0x10, start, offset,
