@@ -39,6 +39,7 @@ def usage():
                     paired alignments
   Other options:
     -s            Option to produce sorted output
+    -t <file>     Produce a file summarizing fragment lengths
     -v            Run in verbose mode
 ''')
   sys.exit(-1)
@@ -192,8 +193,8 @@ def processPaired(header, chrom, rc, start, offset, pos,
         max(start, pos[header]), header, chr, verbose)
 
     # keep track of fragment lengths
-    length[0] += 1
-    length[1] += abs(start - pos[header])
+    dist = abs(start - pos[header])
+    length[dist] = length.get(dist, 0) + 1
 
     pos[header] = -1  # records that read was processed
 
@@ -224,19 +225,16 @@ def processUnpaired(header, chrom, rc, start, offset, pos,
     writeOut(fOut, chrom, start, end, header, chr, verbose)
   pos[header] = -2  # records that read was processed
 
-def processSingle(single, pos, chr, fOut, length,
+def processSingle(single, pos, chr, fOut, addBP,
     sortOpt, res, verbose):
   '''
   Process saved singletons (unpaired alignments)
     using calculated extension size.
   '''
-  if length[0] == 0:
+  if addBP == 0:
     sys.stderr.write('Error! Cannot calculate fragment ' \
       + 'lengths: no paired alignments\n')
     sys.exit(-1)
-
-  # calculate average paired alignment length
-  avg = int(round(length[1] / length[0]))
 
   # process reads
   count = 0
@@ -244,22 +242,22 @@ def processSingle(single, pos, chr, fOut, length,
     for idx in range(len(single[header])):
       chrom, rc, start, offset = single[header][idx]
       processUnpaired(header, chrom, rc, start, offset,
-        pos, chr, fOut, avg, sortOpt, res, verbose)
+        pos, chr, fOut, addBP, sortOpt, res, verbose)
       count += 1
   return count
 
 def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt,
-    sortOpt, verbose):
+    sortOpt, histFile, verbose):
   '''
   Parse the input file, and produce the output file.
   '''
-  chr = {}  # chromosome lengths
-  pos = {}  # position of first alignment (for paired reads)
-  single = {}  # to save unpaired alignments (for calc.-extension option)
-  count = 0    # count of unpaired alignments
-  length = [0, 0.0]  # for calculating fragment lengths
-  res = {}  # to save results, for sorted output
-  chrOrder = []  # to save chromosome order, for sorted output
+  chr = {}      # chromosome lengths
+  pos = {}      # position of first alignment (for paired alignments)
+  single = {}   # to save unpaired alignments (for calc.-extension option)
+  count = 0     # count of unpaired alignments
+  length = {}   # to save fragment lengths
+  res = {}      # to save results, for sorted output
+  chrOrder = [] # to save chromosome order, for sorted output
 
   line = fIn.readline().rstrip()
   while line:
@@ -311,28 +309,40 @@ def parseSAM(fIn, fOut, singleOpt, addBP, extendOpt,
   # check for paired alignments that weren't processed
   unpaired = checkPaired(pos, verbose)
 
+  # sum paired fragment lengths
+  countPE = 0
+  lenPE = 0.0
+  for n in length:
+    countPE += length[n]
+    lenPE += n * length[n]
+
   # for calculated-extension option, process saved unpaired alns
   if extendOpt:
-    count = processSingle(single, pos, chr, fOut, length,
+    if countPE:
+      addBP = int(round(lenPE / countPE))
+    count = processSingle(single, pos, chr, fOut, addBP,
       sortOpt, res, verbose)
 
   # produce sorted output
   if sortOpt:
     writeSorted(fOut, res, chrOrder, chr, verbose)
 
+  # produce histogram file of fragment lengths
+  if histFile != None and length:
+    for i in range(max(length.keys()) + 1):
+      histFile.write(str(i) + '\t' + str(length.get(i, 0)) + '\n')
+
   # log counts
   if verbose:
     sys.stderr.write('Paired alignments (fragments): ' \
-      + '%d (%d)\n' % (length[0]*2, length[0]))
-    if length[0]:
+      + '%d (%d)\n' % (countPE*2, countPE))
+    if countPE:
       sys.stderr.write('  Average fragment length: %.1fbp\n' \
-        % ( length[1] / length[0] ))
+        % ( lenPE / countPE ))
     if unpaired:
       sys.stderr.write('"Paired" reads missing mates: %d\n' % unpaired)
     if singleOpt or extendOpt:
       sys.stderr.write('Unpaired alignments: %d\n' % count)
-      if extendOpt:
-        addBP = int(round(length[1] / length[0]))
       if addBP:
         sys.stderr.write('  (extended to length %dbp)\n' % addBP)
 
@@ -347,6 +357,7 @@ def main():
   addBP = 0          # number of bp to add to unpaired reads
   extendOpt = False  # option to calculate extension size
   sortOpt = False    # option to produce sorted output
+  histFile = None    # output file for histogram of fragment lengths
   verbose = False    # verbose option
 
   # get command-line args
@@ -375,6 +386,8 @@ def main():
       elif args[i] == '-a':
         singleOpt = True
         addBP = max(getInt(args[i+1]), 0)
+      elif args[i] == '-t':
+        histFile = openWrite(args[i+1])
       else:
         sys.stderr.write('Error! Unknown parameter: %s\n' % args[i])
         usage()
@@ -392,9 +405,11 @@ def main():
 
   # process files
   parseSAM(infile, outfile, singleOpt, addBP, extendOpt,
-    sortOpt, verbose)
+    sortOpt, histFile, verbose)
   if infile != sys.stdin:
     infile.close()
+  if histFile != None and histFile != sys.stdout:
+    histFile.close()
   if outfile != sys.stdout:
     outfile.close()
 
