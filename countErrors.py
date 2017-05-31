@@ -61,17 +61,13 @@ def getTag(lis, tag):
   sys.stderr.write('Error! Cannot find %s in SAM record\n' % tag)
   sys.exit(-1)
 
-def findDiffs(cigar, md, pr):
+def findDiffs(cigar, md):
   '''
   Find positions of differences using CIGAR and MD.
   '''
-  if pr:
-    print cigar
   pos = 0  # position on md string
   loc = 0  # location on cigar
   parts = re.findall(r'(\d+|\D+|\^\D+)', md)
-  if pr:
-    print parts
   for part in parts:
     try:
       # sequence match
@@ -95,6 +91,7 @@ def findDiffs(cigar, md, pr):
           sys.stderr.write('Error! MD deletion not in CIGAR\n' \
             + 'CIGAR: ' + cigar \
             + '\nMD: ' + md + '\n')
+          sys.exit(0)
         if len(part) > i + 1:
           sys.stderr.write('Error! MD deletion not separated ' \
             + 'from substitution: ' + md + '\n')
@@ -103,26 +100,49 @@ def findDiffs(cigar, md, pr):
       else:
 
         # substitution -- put 'X' in cigar
-        #ins = 0
         for i in range(len(part)):
           # skip inserted bases
           while cigar[loc] == 'I':
             loc += 1
           cigar = cigar[:loc + i] + 'X' + cigar[loc + i + 1:]
-          #cigar = cigar[:loc + ins + i] + 'X' + cigar[loc + ins + i + 1:]
           loc += 1
-        #loc += len(part) + ins
 
-  if pr:
-    print cigar, '\n'
-#  sys.exit(0)
+  return cigar
 
+def countBases(res, diff, seq, qual, idx):
+  '''
+  Count matches/mismatches/insertions/Ns.
+  '''
+  for i in range(len(diff)):
+    q = ord(qual[i]) - 33  # assume Sanger scale
+    val = idx[diff[i]]
+    if seq[i] == 'N':
+      val = 3
+    res[ q ][ val ] += 1
 
-def processSAM(f):
+def printOutput(fOut, res):
+  '''
+  Produce output.
+  '''
+  fOut.write('\t'.join(['qual', 'match', 'sub', 'ins', 'N',
+    'subRate', 'insRate', 'NRate']) + '\n')
+  for i in range(len(res)):
+    fOut.write('\t'.join(map(str, [i] + res[i])))
+    total = float(sum(res[i]))
+    for j in range(1, 4):
+      if total:
+        fOut.write('\t%.9f' % (res[i][j] / total))
+      #else:
+      #  fOut.write('\tNA')
+    fOut.write('\n')
+
+def processSAM(fIn, fOut):
   '''
   Process the SAM file. Count errors.
   '''
-  for line in f:
+  res = [[0, 0, 0, 0] for i in range(41)]  # for collecting results
+  idx = {'M': 0, 'X': 1, 'I': 2}  # values for CIGAR characters
+  for line in fIn:
     if line[0] == '@': continue
     spl = line.rstrip().split('\t')
     if len(spl) < 11:
@@ -134,25 +154,22 @@ def processSAM(f):
     # determine positions of differences with CIGAR and MD
     cigar = parseCigar(spl[5])
     md = getTag(spl[11:], 'MD')
+    diff = findDiffs(cigar, md)
 
-    ###
-    # print certain reads' results
-    pr = False
-    head = ['HSQ-7001360:311:HYFH5BCXX:1:1103:7011:49414', 'HSQ-7001360:311:HYFH5BCXX:1:1101:2558:2213', 'HSQ-7001360:311:HYFH5BCXX:1:1107:13423:77493']
-    if spl[0] in head:
-      pr = True
-    ###
+    # count bases
+#    print spl[10]
+#    print diff
+    countBases(res, diff, spl[9], spl[10], idx)
+#    print res
 
-    diff = findDiffs(cigar, md, pr)
+#    if re.search(r'I', diff):
+#      sys.exit(0)
+#    head = ['HSQ-7001360:311:HYFH5BCXX:1:1103:7011:49414', 'HSQ-7001360:311:HYFH5BCXX:1:1101:2558:2213', 'HSQ-7001360:311:HYFH5BCXX:1:1107:13423:77493']
+#    if spl[0] in head:
+#      print cigar
+#      print diff
 
-    qual = spl[10]
-
-    pos = 0  # position in seq/qual
-
-#    for op in cigar:
-#      print op[0], op[1]
-#    print md + '\n' + seq + '\n' + qual + '\n'
-#    sys.exit(0)
+  printOutput(fOut, res)
 
 def main():
   args = sys.argv[1:]
@@ -165,7 +182,7 @@ def main():
   fOut = openWrite(args[1])
 
   # process SAM file
-  processSAM(fIn)
+  res = processSAM(fIn, fOut)
 
   if fIn != sys.stdin:
     fIn.close()
