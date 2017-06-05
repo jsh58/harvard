@@ -15,6 +15,7 @@
 # $ samtools view -h <BAM> | python SAMtoBED.py -i - -o <BED>
 
 import sys
+import gzip
 import re
 version = '0.1'
 copyright = 'Copyright (C) 2017 John M. Gaspar (jsh58@wildcats.unh.edu)'

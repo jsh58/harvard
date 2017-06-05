@@ -5,6 +5,7 @@
 # make fixedStep wiggle from bedGraph (4-column)
 
 import sys
+import gzip
 
 def openRead(filename):
   '''

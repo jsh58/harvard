@@ -43,13 +43,17 @@ def openWrite(filename):
 
 def parseCigar(cigar):
   '''
-  Return string representation of CIGAR.
+  Return positions of inserted bases.
   '''
-  ops = re.findall(r'(\d+)([IDM])', cigar)
-  cigar = ''
+  ops = re.findall(r'(\d+)([IM])', cigar)
+  ins = {}
+  pos = 0
   for op in ops:
-    cigar += int(op[0]) * op[1]
-  return cigar
+    if op[1] == 'I':
+      for i in range(pos, pos + int(op[0])):
+        ins[i] = 1
+    pos += int(op[0])
+  return ins
 
 def getTag(lis, tag):
   '''
@@ -62,11 +66,12 @@ def getTag(lis, tag):
   sys.stderr.write('Error! Cannot find %s in SAM record\n' % tag)
   sys.exit(-1)
 
-def findDiffs(cigar, md):
+def findDiffs(ins, md):
   '''
-  Find positions of differences using CIGAR and MD.
+  Find positions of substitutions using CIGAR and MD.
   '''
-  loc = 0  # location on cigar
+  loc = 0  # location on read
+  sub = {}
   parts = re.findall(r'(\d+|\D+|\^\D+)', md)
   for part in parts:
     try:
@@ -75,48 +80,39 @@ def findDiffs(cigar, md):
 
       # adjust for insertions (which do not consume MD parts)
       while val:
-        if cigar[loc] != 'I':
+        if loc not in ins:
           val -= 1
         loc += 1
 
     except ValueError:
 
+      # skip deletion
       if part[0] == '^':
-        # deletion: remove from cigar
-        i = 0
-        while cigar[loc + i] == 'D':
-          i += 1
-        cigar = cigar[:loc] + cigar[loc + i:]
-        if not i:
-          sys.stderr.write('Error! MD deletion not in CIGAR\n' \
-            + 'CIGAR: ' + cigar \
-            + '\nMD: ' + md + '\n')
-          sys.exit(0)
-        if len(part) > i + 1:
-          sys.stderr.write('Error! MD deletion not separated ' \
-            + 'from substitution: ' + md + '\n')
-          sys.exit(0)
+        pass
 
       else:
 
-        # substitution -- put 'X' in cigar
+        # substitution -- save to 'sub' dict
         for i in range(len(part)):
           # skip inserted bases
-          while cigar[loc] == 'I':
+          while loc in ins:
             loc += 1
-          cigar = cigar[:loc + i] + 'X' + cigar[loc + i + 1:]
+          sub[loc + i] = 1
           loc += 1
 
-  return cigar
+  return sub
 
-def countBases(res, diff, seq, qual):
+def countBases(res, sub, ins, seq, qual):
   '''
   Count matches/mismatches/insertions/Ns.
   '''
-  idx = {'M': 0, 'X': 1, 'I': 2}  # values for CIGAR characters
-  for i in range(len(diff)):
+  for i in range(len(qual)):
     q = ord(qual[i]) - 33  # assume Sanger scale
-    val = idx[diff[i]]
+    val = 0
+    if i in sub:
+      val = 1
+    elif i in ins:
+      val = 2
     if seq[i] == 'N':
       val = 3
     res[ q ][ val ] += 1
@@ -152,12 +148,12 @@ def processSAM(fIn, fOut):
     if flag & 0x904: continue  # skip unmapped, sec/supp
 
     # determine positions of differences with CIGAR and MD
-    cigar = parseCigar(spl[5])
+    ins = parseCigar(spl[5])
     md = getTag(spl[11:], 'MD')
-    diff = findDiffs(cigar, md)
+    sub = findDiffs(ins, md)
 
     # count bases
-    countBases(res, diff, spl[9], spl[10])
+    countBases(res, sub, ins, spl[9], spl[10])
 
   printOutput(fOut, res)
 
