@@ -41,19 +41,17 @@ def openWrite(filename):
     sys.exit(-1)
   return f
 
-def parseCigar(cigar):
+def parseCigar(cigar, diff):
   '''
-  Return positions of inserted bases.
+  Save positions of inserted bases.
   '''
   ops = re.findall(r'(\d+)([IM])', cigar)
-  ins = {}
   pos = 0
   for op in ops:
     if op[1] == 'I':
       for i in range(pos, pos + int(op[0])):
-        ins[i] = 1
+        diff[i] = 2
     pos += int(op[0])
-  return ins
 
 def getTag(lis, tag):
   '''
@@ -66,12 +64,11 @@ def getTag(lis, tag):
   sys.stderr.write('Error! Cannot find %s in SAM record\n' % tag)
   sys.exit(-1)
 
-def findDiffs(ins, md):
+def findDiffs(diff, md):
   '''
-  Find positions of substitutions using CIGAR and MD.
+  Find positions of substitutions using MD.
   '''
   loc = 0  # location on read
-  sub = {}
   parts = re.findall(r'(\d+|\D+|\^\D+)', md)
   for part in parts:
     try:
@@ -80,7 +77,7 @@ def findDiffs(ins, md):
 
       # adjust for insertions (which do not consume MD parts)
       while val:
-        if loc not in ins:
+        if diff[loc] != 2:
           val -= 1
         loc += 1
 
@@ -92,30 +89,21 @@ def findDiffs(ins, md):
 
       else:
 
-        # substitution -- save to 'sub' dict
+        # substitution
         for i in range(len(part)):
           # skip inserted bases
-          while loc in ins:
+          while diff[loc] == 2:
             loc += 1
-          sub[loc + i] = 1
+          diff[loc + i] = 1
           loc += 1
 
-  return sub
-
-def countBases(res, sub, ins, seq, qual):
+def countBases(res, diff, qual):
   '''
   Count matches/mismatches/insertions/Ns.
   '''
   for i in range(len(qual)):
     q = ord(qual[i]) - 33  # assume Sanger scale
-    val = 0
-    if i in sub:
-      val = 1
-    elif i in ins:
-      val = 2
-    if seq[i] == 'N':
-      val = 3
-    res[ q ][ val ] += 1
+    res[ q ][ diff[i] ] += 1
 
 def printOutput(fOut, res):
   '''
@@ -147,20 +135,23 @@ def processSAM(fIn, fOut):
     flag = int(spl[1])
     if flag & 0x904: continue  # skip unmapped, sec/supp
 
-    # determine positions of differences with CIGAR and MD
-    ins = parseCigar(spl[5])
-    md = getTag(spl[11:], 'MD')
-    sub = findDiffs(ins, md)
+    # determine positions of differences using CIGAR and MD
+    diff = [0] * len(spl[9])  # assume matches at every position (value=0)
+    parseCigar(spl[5], diff)  # add insertions (value=2)
+    findDiffs(diff, getTag(spl[11:], 'MD'))  # add substitutions (value=1)
+    for i in range(len(spl[9])):  # add Ns (value=3)
+      if spl[9][i] == 'N':
+        diff[i] = 3
 
-    # count bases
-    countBases(res, sub, ins, spl[9], spl[10])
+    # count bases by quality score
+    countBases(res, diff, spl[10])
 
   printOutput(fOut, res)
 
 def main():
   args = sys.argv[1:]
   if len(args) < 2:
-    sys.stderr.write('Usage: python countErrors.py  <inSAM>  <out>\n')
+    sys.stderr.write('Usage: python countErrors2.py  <inSAM>  <out>\n')
     sys.exit(-1)
 
   # open SAM file
