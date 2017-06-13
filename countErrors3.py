@@ -3,6 +3,7 @@
 # JMG 5/2017
 # Count errors in a SAM based on quality scores.
 # Version 2: increased efficiency
+# Version 3: option to limit analysis to overlap region
 
 import sys
 import gzip
@@ -98,11 +99,11 @@ def findDiffs(diff, md):
           diff[loc + i] = 1
           loc += 1
 
-def countBases(res, diff, qual):
+def countBases(res, diff, qual, start, end):
   '''
   Count matches/mismatches/insertions/Ns.
   '''
-  for i in range(len(qual)):
+  for i in range(start, end):
     q = ord(qual[i]) - 33  # assume Sanger scale
     if q > 40:
       sys.stderr.write('Error! Quality score outside of Sanger range\n')
@@ -125,7 +126,7 @@ def printOutput(fOut, res):
       #  fOut.write('\tNA')
     fOut.write('\n')
 
-def processSAM(fIn, fOut):
+def processSAM(fIn, fOut, length):
   '''
   Process the SAM file. Count errors.
   '''
@@ -148,8 +149,15 @@ def processSAM(fIn, fOut):
       if spl[9][i] == 'N':
         diff[i] = 3
 
+    # determine positions to analyze
+    start = 0
+    end = len(spl[10])
+    if length:
+      start = max(len(spl[10]) - length, 0)
+      end = min(length, len(spl[10]))
+
     # count bases by quality score
-    countBases(res, diff, spl[10])
+    countBases(res, diff, spl[10], start, end)
     count += 1
 
   printOutput(fOut, res)
@@ -158,15 +166,18 @@ def processSAM(fIn, fOut):
 def main():
   args = sys.argv[1:]
   if len(args) < 2:
-    sys.stderr.write('Usage: python countErrors2.py  <inSAM>  <out>\n')
+    sys.stderr.write('Usage: python countErrors2.py  <inSAM>  <out>  [<length>]\n')
     sys.exit(-1)
 
   # open SAM file
   fIn = openRead(args[0])
   fOut = openWrite(args[1])
+  length = 0   # length of original reads
+  if len(args) > 2:
+    length = int(args[2])
 
   # process SAM file
-  res = processSAM(fIn, fOut)
+  res = processSAM(fIn, fOut, length)
 
   if fIn != sys.stdin:
     fIn.close()
