@@ -115,28 +115,24 @@ def findDiffs(diff, md):
           diff[loc + i] = 1
           loc += 1
 
-def countBases(res, res2, diff, qual, start, end, pos):
+def countBases(res, res2, res3, diff, qual, start, end, pos, pos2):
   '''
   Count matches/mismatches/insertions/Ns.
   'pos' has list of positions of stitch mismatches --
-    save the results to res2.
+    save the results to res2. 'pos2' has list of positions
+    of stitch mismatches due to Ns -- save to res3.
   '''
-#  if len(pos) > 0: print res
   for i in range(start, end):
     q = ord(qual[i]) - 33  # assume Sanger scale
-    if q > 40:
+    if q > 40 or q < 0:
       sys.stderr.write('Error! Quality score outside of Sanger range\n')
       sys.exit(-1)
-    if i in pos:
+    if i in pos2:
+      res3[ q ][ diff[i] ] += 1
+    elif i in pos:
       res2[ q ][ diff[i] ] += 1
     else:
       res[ q ][ diff[i] ] += 1
-#    if len(pos) > 0:
-#      sys.stdout.write(qual[i])
-#  if len(pos) > 0:
-#    print
-#    print res
-#    raw_input()
 
 def printOutput(fOut, res):
   '''
@@ -160,6 +156,7 @@ def processSAM(fIn, fOut, length, mismatch):
   '''
   res = [[0, 0, 0, 0] for i in range(41)]  # for collecting results
   res2 = [[0, 0, 0, 0] for i in range(41)]  # for results of stitch mismatches
+  res3 = [[0, 0, 0, 0] for i in range(41)]  # for results of mismatches due to Ns
   count = 0
   for line in fIn:
     if line[0] == '@': continue
@@ -186,23 +183,36 @@ def processSAM(fIn, fOut, length, mismatch):
       end = min(length, len(spl[10]))
 
     # find positions of stitch mismatches
-    pos = []
+    pos = []   # regular mismatches
+    pos2 = []  # mismatches due to Ns
     if spl[0] in mismatch:
       for t in mismatch[spl[0]]:
-        if flag & 0x10:
-          pos.append(len(spl[10])-int(t[0])-1) # adjust if rc
+
+        if t[1] == 'N' or t[3] == 'N':
+          # mismatch due to 'N'
+          if flag & 0x10:
+            pos2.append(len(spl[10])-int(t[0])-1) # adjust if rc
+          else:
+            pos2.append(int(t[0]))
+
         else:
-          pos.append(int(t[0]))
+          # regular mismatch
+          if flag & 0x10:
+            pos.append(len(spl[10])-int(t[0])-1) # adjust if rc
+          else:
+            pos.append(int(t[0]))
 
     # count bases by quality score
-#    print spl[0]
-    countBases(res, res2, diff, spl[10], start, end, pos)
+    countBases(res, res2, res3, diff, spl[10], start, end, pos, pos2)
     count += 1
 
+  fOut.write('\nStitch matches:\n')
   printOutput(fOut, res)
   if mismatch:
     fOut.write('\nStitch mismatches:\n')
     printOutput(fOut, res2)
+    fOut.write('\nStitch mismatches due to Ns:\n')
+    printOutput(fOut, res3)
   sys.stderr.write('Reads analyzed: %d\n' % count)
 
 def main():
