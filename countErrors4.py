@@ -115,22 +115,22 @@ def findDiffs(diff, md):
           diff[loc + i] = 1
           loc += 1
 
-def countBases(res, res2, res3, diff, qual, start, end, pos, pos2):
+def countBases(res, res2, res3, diff, qual, start, end, pos):
   '''
   Count matches/mismatches/insertions/Ns.
   'pos' has list of positions of stitch mismatches --
-    save the results to res2. 'pos2' has list of positions
-    of stitch mismatches due to Ns -- save to res3.
+    save the results to res2 (or res3 if one is 'N').
   '''
   for i in range(start, end):
     q = ord(qual[i]) - 33  # assume Sanger scale
     if q > 40 or q < 0:
       sys.stderr.write('Error! Quality score outside of Sanger range\n')
       sys.exit(-1)
-    if i in pos2:
-      res3[ q ][ diff[i] ] += 1
-    elif i in pos:
-      res2[ q ][ diff[i] ] += 1
+    if i in pos:
+      if pos[i][0] == 'N' or pos[i][2] == 'N':
+        res3[ q ][ diff[i] ] += 1
+      else:
+        res2[ q ][ diff[i] ] += 1
     else:
       res[ q ][ diff[i] ] += 1
 
@@ -183,30 +183,19 @@ def processSAM(fIn, fOut, length, mismatch):
       end = min(length, len(spl[10]))
 
     # find positions of stitch mismatches
-    pos = []   # regular mismatches
-    pos2 = []  # mismatches due to Ns
+    pos = dict()
     if spl[0] in mismatch:
       for t in mismatch[spl[0]]:
-
-        if t[1] == 'N' or t[3] == 'N':
-          # mismatch due to 'N'
-          if flag & 0x10:
-            pos2.append(len(spl[10])-int(t[0])-1) # adjust if rc
-          else:
-            pos2.append(int(t[0]))
-
+        if flag & 0x10:
+          pos[len(spl[10])-int(t[0])-1] = t[1:] # adjust if rc
         else:
-          # regular mismatch
-          if flag & 0x10:
-            pos.append(len(spl[10])-int(t[0])-1) # adjust if rc
-          else:
-            pos.append(int(t[0]))
+          pos[int(t[0])] = t[1:]
 
     # count bases by quality score
-    countBases(res, res2, res3, diff, spl[10], start, end, pos, pos2)
+    countBases(res, res2, res3, diff, spl[10], start, end, pos)
     count += 1
 
-  fOut.write('\nStitch matches:\n')
+  fOut.write('Stitch matches:\n')
   printOutput(fOut, res)
   if mismatch:
     fOut.write('\nStitch mismatches:\n')
