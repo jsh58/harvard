@@ -150,7 +150,7 @@ def printOutput(fOut, res):
       #  fOut.write('\tNA')
     fOut.write('\n')
 
-def processSAM(fIn, fOut, length, mismatch):
+def processSAM(fIn, fOut, len_R1, len_R2, mismatch):
   '''
   Process the SAM file. Count errors.
   '''
@@ -178,9 +178,13 @@ def processSAM(fIn, fOut, length, mismatch):
     # determine positions to analyze
     start = 0
     end = len(spl[10])
-    if length:
-      start = max(len(spl[10]) - length, 0)
-      end = min(length, len(spl[10]))
+    if len_R1:
+      if flag & 0x10:
+        start = max(len(spl[10]) - len_R1, 0)
+        end = min(len_R2, len(spl[10]))
+      else:
+        start = max(len(spl[10]) - len_R2, 0)
+        end = min(len_R1, len(spl[10]))
 
     # find positions of stitch mismatches
     pos = dict()
@@ -195,7 +199,8 @@ def processSAM(fIn, fOut, length, mismatch):
     countBases(res, res2, res3, diff, spl[10], start, end, pos)
     count += 1
 
-  fOut.write('Stitch matches:\n')
+  if mismatch:
+    fOut.write('Stitch matches:\n')
   printOutput(fOut, res)
   if mismatch:
     fOut.write('\nStitch mismatches:\n')
@@ -214,15 +219,20 @@ def main():
   # open SAM file
   fIn = openRead(args[0])
   fOut = openWrite(args[1])
-  length = 0   # length of original reads
+  len_R1 = len_R2 = 0   # length of original reads
   if len(args) > 2:
-    length = int(args[2])
+    spl = args[2].split(',')
+    len_R1 = int(spl[0])
+    if len(spl) > 1:
+      len_R2 = int(spl[1])
+    else:
+      len_R2 = len_R1
   mismatch = dict()
   if len(args) > 3:
     loadMismatch(args[3], mismatch)
 
   # process SAM file
-  processSAM(fIn, fOut, length, mismatch)
+  processSAM(fIn, fOut, len_R1, len_R2, mismatch)
 
   if fIn != sys.stdin:
     fIn.close()
