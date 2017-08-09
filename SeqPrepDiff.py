@@ -46,9 +46,16 @@ def printDiff(f, read, seq1, seq2):
   '''
   Print differences between two seqs.
   '''
-  for i in xrange(min(len(seq1), len(seq2))):
-    if seq1[i] != seq2[i] and seq1[i] != ' ' and seq2[i] != ' ':
-      f.write('\t'.join([read, str(i), seq1[i], '!', seq2[i], '!']) + '\n')
+  # determine length of leading/trailing gaps ('---')
+  leadGap = 0
+  while seq1[leadGap] == '-' or seq2[leadGap] == '-':
+    leadGap += 1
+  tailGap = min(len(seq1), len(seq2)) - 1
+  while seq1[tailGap] == '-' or seq2[tailGap] == '-':
+    tailGap -= 1
+  for j in xrange(leadGap, tailGap + 1):
+    if seq1[j] != seq2[j] and seq1[j] != ' ' and seq2[j] != ' ':
+      f.write('\t'.join([read, str(j - leadGap), seq1[j], '!', seq2[j], '!']) + '\n')
 
 def parseFile(fIn, fOut):
   '''
@@ -61,12 +68,20 @@ def parseFile(fIn, fOut):
   while line:
     spl = line.rstrip()
     if spl[0:3] == 'ID:':
-      read = spl[4:]
+      read = spl[3:].lstrip()
     elif spl[0:5] == 'SUBJ:':
       subj = spl[6:]
+    elif spl[0:6] == 'READ1:':
+      subj = spl[7:]
     elif spl[0:5] == 'QUER:':
       quer = spl[6:]
       printDiff(fOut, read, subj, quer)
+      read = subj = quer = ''
+      count += 1
+    elif spl[0:6] == 'READ2:':
+      quer = spl[7:]
+      printDiff(fOut, read, subj, quer)
+      read = subj = quer = ''
       count += 1
     line = fIn.readline()
   sys.stderr.write('Reads analyzed: %d\n' % count)
