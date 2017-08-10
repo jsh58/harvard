@@ -118,7 +118,7 @@ def findDiffs(diff, md):
           loc += 1
 
 def countBases(res, res2, res3, res4, diff,
-    qual, start, end, pos, stitch):
+    qual, start, end, pos, stitch, maxQual):
   '''
   Count matches/mismatches/insertions/Ns.
     For stitched reads, separate counts into
@@ -131,8 +131,8 @@ def countBases(res, res2, res3, res4, diff,
   if stitch:
     for i in range(len(diff)):
       q = ord(qual[i]) - 33  # assume Sanger scale
-      if q > 40 or q < 0:
-        sys.stderr.write('Error! Quality score outside of Sanger range\n')
+      if q > maxQual or q < 0:
+        sys.stderr.write('Error! Quality score outside of range [0, %d]\n' % maxQual)
         sys.exit(-1)
       if i >= start and i < end:
         if i in pos:
@@ -169,14 +169,15 @@ def printOutput(fOut, res):
       #  fOut.write('\tNA')
     fOut.write('\n')
 
-def processSAM(fIn, fOut, len_R1, len_R2, mismatch, stitch):
+def processSAM(fIn, fOut, len_R1, len_R2, mismatch,
+    stitch, maxQual):
   '''
   Process the SAM file. Count errors.
   '''
-  res = [[0, 0, 0, 0] for i in range(41)]  # for collecting results
-  res2 = [[0, 0, 0, 0] for i in range(41)]  # for results of stitch matches
-  res3 = [[0, 0, 0, 0] for i in range(41)]  # for results of stitch mismatches
-  res4 = [[0, 0, 0, 0] for i in range(41)]  # for results of mismatches due to Ns
+  res = [[0, 0, 0, 0] for i in range(maxQual + 1)]  # for collecting results
+  res2 = [[0, 0, 0, 0] for i in range(maxQual + 1)]  # for results of stitch matches
+  res3 = [[0, 0, 0, 0] for i in range(maxQual + 1)]  # for results of stitch mismatches
+  res4 = [[0, 0, 0, 0] for i in range(maxQual + 1)]  # for results of mismatches due to Ns
   d = dict()  # for read headers (checking for duplicates)
   count = 0
   for line in fIn:
@@ -223,7 +224,7 @@ def processSAM(fIn, fOut, len_R1, len_R2, mismatch, stitch):
 
     # count bases by quality score
     countBases(res, res2, res3, res4, diff,
-      spl[10], start, end, pos, stitch)
+      spl[10], start, end, pos, stitch, maxQual)
     count += 1
 
   if stitch:
@@ -242,7 +243,7 @@ def main():
   args = sys.argv[1:]
   if len(args) < 2:
     sys.stderr.write('Usage: python countErrors6.py  <inSAM>  ' \
-      + '<out>  [<length>]  [<alnFile>]\n')
+      + '<out>  [<length>]  [<alnFile>]  [maxQual]\n')
     sys.exit(-1)
 
   # open SAM file
@@ -261,9 +262,13 @@ def main():
   mismatch = dict()
   if len(args) > 3:
     loadMismatch(args[3], mismatch)
+  maxQual = 40
+  if len(args) > 4:
+    maxQual = int(args[4])
 
   # process SAM file
-  processSAM(fIn, fOut, len_R1, len_R2, mismatch, stitch)
+  processSAM(fIn, fOut, len_R1, len_R2, mismatch,
+    stitch, maxQual)
 
   if fIn != sys.stdin:
     fIn.close()
