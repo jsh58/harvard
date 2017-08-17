@@ -148,7 +148,7 @@ def countBases(res, res2, res3, res4, diff,
   else:
     for i in range(len(diff)):
       q = ord(qual[i]) - 33  # assume Sanger scale
-      if q > 40 or q < 0:
+      if q > maxQual or q < 0:
         sys.stderr.write('Error! Quality score outside of Sanger range\n')
         sys.exit(-1)
       res[ q ][ diff[i] ] += 1
