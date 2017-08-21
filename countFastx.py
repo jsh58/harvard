@@ -26,19 +26,22 @@ def main():
     sys.exit(-1)
   char = line[0]
 
-  # fastq file
+  # fasta file
+  count = 0
   if char == '>':
     seq = ''
     while line:
       if line[0] == '>':
         if seq:
           procSeq(seq, d)
+          count += 1
         seq = ''
       else:
         seq += line.rstrip()
       line = f.readline()
     if seq:
       procSeq(seq, d)
+      count += 1
 
   # fastq file
   else:
@@ -50,8 +53,10 @@ def main():
         line = f.readline()
         if i == 0:
           procSeq(line.rstrip(), d)
+          count += 1
       line = f.readline()
 
+  print 'Reads processed:', count
   for nuc in d:
     print nuc + '\t' + str(d[nuc])
 
