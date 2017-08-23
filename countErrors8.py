@@ -70,21 +70,6 @@ def getTag(lis, tag):
   sys.stderr.write('Error! Cannot find %s in SAM record\n' % tag)
   sys.exit(-1)
 
-def loadMismatch(filename, d):
-  '''
-  Load stitching mismatches to given dict.
-  '''
-  f = openRead(filename)
-  for line in f:
-    spl = line.rstrip().split('\t')
-    if spl[0] in d:
-      d[spl[0]].append(spl[1:])
-    else:
-      d[spl[0]] = [spl[1:]]
-
-  if f != sys.stdin:
-    f.close()
-
 def findDiffs(diff, md):
   '''
   Find positions of substitutions using MD.
@@ -291,14 +276,13 @@ def loadReads(r1, r2):
   line1 = r1.readline()
   line2 = r2.readline()
   while line1 and line2:
-    head = line1
-    if head[0] != '@':
+    if line1[0] != '@':
       sys.stderr.write('Error! Not FASTQ format\n')
       sys.exit(-1)
-    if line1 != line2:
+    head = line1.rstrip().split(' ')[0][1:]
+    if head != line2.rstrip().split(' ')[0][1:]:
       sys.stderr.write('Error! R1/R2 files do not match\n')
       sys.exit(-1)
-    head = head[1:].rstrip()
     for i in xrange(3):
       line1 = r1.readline()
       line2 = r2.readline()

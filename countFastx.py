@@ -5,6 +5,7 @@
 # Count ACGTNX in a fasta/fastq file.
 
 import sys
+import gzip
 
 def procSeq(seq, d):
   '''Count nucs in a seq.'''
@@ -16,7 +17,11 @@ def main():
   if len(args) < 1:
     sys.stderr.write('Need fasta/fastq file on CL\n')
     sys.exit(-1)
-  f = open(args[0], 'rU')
+
+  if args[0][-3:] == '.gz':
+    f = gzip.open(args[0], 'rb')
+  else:
+    f = open(args[0], 'rU')
   d = dict()
 
   # determine file format
