@@ -162,7 +162,7 @@ def print3d(fOut, res):
     fOut.write(str(i))
     for j in range(len(res[i])):
       fOut.write('\t%d/%d' % (res[i][j][1], sum(res[i][j][0:2])))
-      count += sum(res[i][j][0:2])
+      count += sum(res[i][j])  # include insertions and Ns in count
       #total = float(sum(res[i][j][0:2]))
       #if total:
       #  fOut.write('\t%.9f' % (res[i][j][1] / total))
@@ -176,8 +176,9 @@ def alignReads(head, flag, raw, length):
   if head not in raw:
     sys.stderr.write('Error! Cannot find %s in raw reads\n' % head)
     sys.exit(-1)
-  offset = length - len(raw[head][2])
+  #offset = length - len(raw[head][2])
   if flag & 0x10:
+    offset = length - len(raw[head][0])
     if offset < 0:
       seq1 = revComp(raw[head][0])[-offset:]
       qual1 = raw[head][1][offset-1::-1]
@@ -187,6 +188,7 @@ def alignReads(head, flag, raw, length):
     seq2 = raw[head][2]
     qual2 = raw[head][3]
   else:
+    offset = length - len(raw[head][2])
     if offset < 0:
       seq2 = revComp(raw[head][2])[-offset:]
       qual2 = raw[head][3][offset-1::-1]
@@ -239,19 +241,20 @@ def processSAM(fIn, fOut, raw, maxQual):
     count += 1
 
   # print output
+  sys.stderr.write('\t' + str(count))
   fOut.write('Unstitched ends:\n')
   tally = printOutput(fOut, res)
-  sys.stderr.write('Unstitched ends: %d\n' % tally)
+  sys.stderr.write('\t' + str(tally))  # unstitched
   fOut.write('\nStitch matches:\n')
   tally = print3d(fOut, res2)
-  sys.stderr.write('Stitch matches: %d\n' % tally)
+  sys.stderr.write('\t' + str(tally))  # stitch matches
   fOut.write('\nStitch mismatches:\n')
   tally = print3d(fOut, res3)
-  sys.stderr.write('Stitch mismatches: %d\n' % tally)
+  sys.stderr.write('\t' + str(tally))  # stitch mismatches
   fOut.write('\nStitch mismatches due to Ns:\n')
   tally = print3d(fOut, res4)
-  sys.stderr.write('Stitch mismatches due to Ns: %d\n' % tally)
-  sys.stderr.write('Reads analyzed: %d\n' % count)
+  sys.stderr.write('\t' + str(tally))  # mismatches due to Ns
+  sys.stderr.write('\n')
 
 def revComp(dna):
   '''
@@ -319,6 +322,7 @@ def main():
     maxQual = int(args[4])
 
   # process SAM file
+  sys.stderr.write(args[3])
   processSAM(fIn, fOut, d, maxQual)
 
   if fIn != sys.stdin:

@@ -118,9 +118,10 @@ def main():
           match = True
       if match:
         fOut2.write(line)
-    total += 1
-    if match:
-      count += 1
+    if flag:
+      total += 1
+      if match:
+        count += 1
   if fIn2 != sys.stdin:
     fIn2.close()
   if fOut2 != sys.stdout:
