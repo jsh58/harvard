@@ -100,7 +100,7 @@ def main():
     fIn1.close()
   if fOut1 != sys.stdout:
     fOut1.close()
-  sys.stderr.write('Reads in fIn1: %d\n' % total)
+  sys.stderr.write('Reads in %s: %d\n' % (args[1], total))
   sys.stderr.write('  printed: %d\n' % count)
 
   # check reads from 2nd input file
@@ -126,7 +126,7 @@ def main():
     fIn2.close()
   if fOut2 != sys.stdout:
     fOut2.close()
-  sys.stderr.write('Reads in fIn2: %d\n' % total)
+  sys.stderr.write('Reads in %s: %d\n' % (args[2], total))
   sys.stderr.write('  printed: %d\n' % count)
 
 if __name__ == '__main__':
