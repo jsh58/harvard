@@ -65,7 +65,7 @@ def loadFastq(f1):
   count = 0
   line = f1.readline()
   while line:
-    head = line
+    head = line.split(' ')[0]
     if head[0] != '@':
       sys.stderr.write('Error! Not FASTQ format\n')
       sys.exit(-1)
@@ -87,7 +87,7 @@ def compareFastq(f2, d):
   count = miss = diff = 0
   line = f2.readline()
   while line:
-    head = line
+    head = line.split(' ')[0]
     if head[0] != '@':
       sys.stderr.write('Error! Not FASTQ format\n')
       sys.exit(-1)
@@ -116,8 +116,8 @@ def retrieveReads(r1, r2, d):
   '''Retrieve reads from r1/r2 based on headers in d.'''
   raw = dict()
   count = len(d)
-  line1 = r1.readline()
-  line2 = r2.readline()
+  line1 = r1.readline().split(' ')[0]
+  line2 = r2.readline().split(' ')[0]
   while line1 and line2 and count:
     match = False
     head = line1
@@ -125,7 +125,7 @@ def retrieveReads(r1, r2, d):
       sys.stderr.write('Error! Not FASTQ format\n')
       sys.exit(-1)
     if line1 != line2:
-      sys.stderr.write('Error! R1/R2 files do not match\n')
+      sys.stderr.write('Error! R1/R2 files do not match:\n' + line1 + line2)
       sys.exit(-1)
     if head in d:
       match = True
@@ -142,8 +142,8 @@ def retrieveReads(r1, r2, d):
     if match:
       raw[head] = [seq1, qual1, revComp(seq2), qual2[::-1]]
       count -= 1
-    line1 = r1.readline()
-    line2 = r2.readline()
+    line1 = r1.readline().split(' ')[0]
+    line2 = r2.readline().split(' ')[0]
 
   return raw
 
@@ -165,12 +165,10 @@ def findDiffs(d2, raw):
 
     # check for sequence diffs, Ns
     for i in range(min(len(raw[head][0]), len(raw[head][2]))):
-      if raw[head][2][i] == ' ': continue
-      if raw[head][0][i] != raw[head][2][i] \
+      if (raw[head][0][i] != raw[head][2][i] and raw[head][2][i] != ' ') \
           or raw[head][0][i] == 'N' or raw[head][2][i] == 'N':
         d[read].append('\t'.join([str(i), raw[head][0][i], raw[head][1][i], \
           raw[head][2][i], raw[head][3][i]]))
-
   return d
 
 def printOutput(f, fOut, d):

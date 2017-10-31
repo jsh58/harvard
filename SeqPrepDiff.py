@@ -68,7 +68,7 @@ def parseFile(fIn, fOut):
   while line:
     spl = line.rstrip()
     if spl[0:3] == 'ID:':
-      read = spl[3:].lstrip()
+      read = spl[3:].lstrip().split(' ')[0]
     elif spl[0:5] == 'SUBJ:':
       subj = spl[6:]
     elif spl[0:6] == 'READ1:':
