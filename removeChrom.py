@@ -116,7 +116,9 @@ def main():
   '''Main.'''
   args = sys.argv[1:]
   if len(args) < 3:
-    sys.stderr.write('Usage: python removeChr.py <in> <out> [<chr>]+\n')
+    sys.stderr.write('Usage: python removeChrom.py <inSAM> <outSAM> [<chrom>]+\n')
+    sys.stderr.write('  [<chrom>]+  One or more chromosomes (reference\n')
+    sys.stderr.write('              sequences) to be removed from the SAM\n')
     sys.exit(-1)
 
   fIn = openRead(args[0])
