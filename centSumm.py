@@ -6,78 +6,130 @@
 
 import sys
 
-def printOutput(f, score, hier):
+class Node:
   '''
-  Print results.
+  Node: contains taxon name, rank (DKPCOFGS),
+    and score (percent of the sample).
   '''
-  # sort results
-  res = sorted(score, key=score.get, reverse=True)
+  def __init__(self, taxon, rank, score):
+    self.child = []
+    self.taxon = taxon
+    self.rank = rank
+    self.score = float(score)
 
-  # for sorting same-scored taxa by depth
-  def lenTup(tup):
-    return len(tup[2])
+  #def children(self):
+  #  ret = []
+  #  for c in self.child:
+  #    ret.append(c.taxon)
+  #  return ret
 
-  i = 0
-  while i < 20:
-    # save taxa with identical scores
-    tRes = []
-    tScore = score[res[i]]
-    while tScore == score[res[i]]:
-      tRes.append((res[i], score[res[i]], hier[res[i]]))
-      i += 1
+def printLevel(f, n, level, cutoff):
+  '''
+  Print results (recursively).
+  '''
+  if n.score >= cutoff:
+    f.write('%.2f\t' % n.score + ' ' * level \
+      + n.taxon + '\n')
+  for m in n.child:
+    printLevel(f, m, level + 1, cutoff)
 
-    # print results
-    for s in sorted(tRes, key=lenTup):
-      f.write('%.2f' % s[1])
-      for j in range(len(s[2])):
-        f.write('\t' + ' ' * j + s[2][j] + '\n')
+def printOutput(f, unclass, root, cutoff):
+  '''
+  Begin printing results.
+  '''
+  f.write('%.2f\tunclassified\n' % unclass)
+  for n in root.child:
+    printLevel(f, n, 0, cutoff)
 
+def findCutoff(score, n):
+  '''
+  Determine threshold for top n scores.
+  '''
+  if n >= len(score):
+    return min(score)
+  res = sorted(score, reverse=True)
+  return res[n-1]
 
 def loadScores(f):
   '''
   Save scores and taxonomic hierarchies from a
     Centrifuge report.
   '''
-  rank = {'D':0, 'P':1, 'C':2, 'O':3, 'F':4, 'G':5, 'S':6}
-  score = {} # dict of scores (% abundance)
-  hier = {}  # dict of taxonomic hierarchies
-  temp = []  # temp copy of hierarchy
+  rank = 'DKPCOFGS'
+  unclass = 0.0  # 'unclassified' score
+  root = Node('root', 'X', -1)
+  temp = [root]  # temp copy of hierarchy
+  score = []     # list of scores
 
   for line in f:
     spl = line.split('\t')
-    if spl[3] == '-': # and spl[5][0] == ' ':
-      # skip non-canonical levels
+
+    # skip non-canonical levels
+    if spl[3] == '-':
+      if spl[5] in ['  other sequences\n', \
+          '  unclassified sequences\n']:
+        # add special node (for 'other sequences' and
+        #   'unclassified sequences'); reset 'temp'
+        n = Node(spl[5].strip(), 'X', spl[0])
+        root.child.append(n)
+        temp = temp[:1] + [n]
       continue
+    elif spl[3] == 'U':
+      # save unclassified value automatically
+      unclass = float(spl[0])
+      continue
+    elif spl[3] not in rank:
+      sys.stderr.write('Warning! Unknown taxonomic rank:' \
+        + ' %s\n' % spl[3] + '  ' + line)
+      continue
+
+    # find placement of taxon in 'temp' hierarchy
+    if spl[3] == 'D':
+      temp = temp[:1]  # automatically reset for 'D'
+    else:
+      for i in range(1, len(temp)):
+        if spl[3] == temp[i].rank:
+          temp = temp[:i]
+          break
+
+    # save to tree
     taxon = spl[5].strip()
-    if spl[3] not in rank:
-      score[taxon] = float(spl[0])
-      hier[taxon] = [taxon]
-      temp = []   # reset
-      continue
+    n = Node(taxon, spl[3], spl[0])
+    parent = temp[-1]
+    parent.child.append(n)
+    temp.append(n)
 
-    # save taxon to temp, clear higher values
-    level = rank[spl[3]]
-    if level + 1 <= len(temp):
-      temp = temp[:level]
-    temp.append(taxon)
+    # save score
+    score.append(float(spl[0]))
 
-    score[taxon] = float(spl[0])
-    hier[taxon] = temp[:]
-
-  return score, hier
+  return unclass, root, score
 
 def main():
   '''Main.'''
   args = sys.argv[1:]
   if len(args) < 2:
-    sys.stderr.write('Usage: python %s  <kreport>  <out>\n' % sys.argv[0])
+    sys.stderr.write('Usage: python %s  ' % sys.argv[0] \
+      + '<kreport>  <out>  [<num>]\n' \
+      + '  <num>    Number of taxa to print (def. 20)\n')
     sys.exit(-1)
 
+  # load scores and taxonomic tree
   f = open(args[0], 'rU')
-  score, hier = loadScores(f)
+  unclass, root, score = loadScores(f)
+  if f != sys.stdin:
+    f.close()
 
+  # find cutoff score for top n taxa
+  num = 20
+  if len(args) > 2:
+    num = int(args[2])
+  cutoff = findCutoff(score, num)
+
+  # print output
   fOut = open(args[1], 'w')
-  printOutput(fOut, score, hier)
+  printOutput(fOut, unclass, root, cutoff)
+  if fOut != sys.stdout:
+    fOut.close()
 
 if __name__ == '__main__':
   main()
