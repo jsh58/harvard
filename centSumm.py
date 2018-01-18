@@ -63,7 +63,7 @@ def printLevel(f, n, level, cutoff):
   Print results (recursively).
   '''
   if n.score >= cutoff:
-    f.write('%.2f\t' % n.score + '  ' * level \
+    f.write('%6.2f\t' % n.score + '  ' * level \
       + n.taxon + '\n')
   for m in n.child:
     printLevel(f, m, level + 1, cutoff)
@@ -72,7 +72,8 @@ def printOutput(f, unclass, root, cutoff):
   '''
   Begin printing results.
   '''
-  f.write('%.2f\tunclassified\n' % unclass)
+  f.write('percent\ttaxon\n')
+  f.write('%6.2f\tunclassified\n' % unclass)
   for n in root.child:
     printLevel(f, n, 0, cutoff)
 
@@ -122,10 +123,20 @@ def loadScores(f):
     if spl[3] == 'D':
       temp = temp[:1]  # automatically reset for 'D'
     else:
+      found = False
       for i in range(1, len(temp)):
+        # find same rank already in temp
         if spl[3] == temp[i].rank:
           temp = temp[:i]
+          found = True
           break
+      if not found:
+        # if same rank not found, look for parent rank
+        par = rank[rank.find(spl[3]) - 1]
+        for i in range(1, len(temp)):
+          if par == temp[i].rank:
+            temp = temp[:i + 1]
+            break
 
     # save to tree
     taxon = spl[5].strip()
