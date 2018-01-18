@@ -5,6 +5,41 @@
 # Producing a summary from centifuge's kraken-style report.
 
 import sys
+import gzip
+
+def openRead(filename):
+  '''
+  Open filename for reading. '-' indicates stdin.
+    '.gz' suffix indicates gzip compression.
+  '''
+  if filename == '-':
+    return sys.stdin
+  try:
+    if filename[-3:] == '.gz':
+      f = gzip.open(filename, 'rb')
+    else:
+      f = open(filename, 'rU')
+  except IOError:
+    sys.stderr.write('Error! Cannot open %s for reading\n' % filename)
+    sys.exit(-1)
+  return f
+
+def openWrite(filename):
+  '''
+  Open filename for writing. '-' indicates stdout.
+    '.gz' suffix indicates gzip compression.
+  '''
+  if filename == '-':
+    return sys.stdout
+  try:
+    if filename[-3:] == '.gz':
+      f = gzip.open(filename, 'wb')
+    else:
+      f = open(filename, 'w')
+  except IOError:
+    sys.stderr.write('Error! Cannot open %s for writing\n' % filename)
+    sys.exit(-1)
+  return f
 
 class Node:
   '''
@@ -28,7 +63,7 @@ def printLevel(f, n, level, cutoff):
   Print results (recursively).
   '''
   if n.score >= cutoff:
-    f.write('%.2f\t' % n.score + ' ' * level \
+    f.write('%.2f\t' % n.score + '  ' * level \
       + n.taxon + '\n')
   for m in n.child:
     printLevel(f, m, level + 1, cutoff)
@@ -114,7 +149,7 @@ def main():
     sys.exit(-1)
 
   # load scores and taxonomic tree
-  f = open(args[0], 'rU')
+  f = openRead(args[0])
   unclass, root, score = loadScores(f)
   if f != sys.stdin:
     f.close()
@@ -126,7 +161,7 @@ def main():
   cutoff = findCutoff(score, num)
 
   # print output
-  fOut = open(args[1], 'w')
+  fOut = openWrite(args[1])
   printOutput(fOut, unclass, root, cutoff)
   if fOut != sys.stdout:
     fOut.close()
