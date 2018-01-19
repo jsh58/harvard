@@ -44,25 +44,21 @@ def openWrite(filename):
 class Node:
   '''
   Node: contains taxon name, rank (DKPCOFGS),
-    and score (percent of the sample).
+    score (percent of the sample), and
+    count (number of reads).
   '''
-  def __init__(self, taxon, rank, score):
+  def __init__(self, taxon, rank, score, count):
     self.child = []
     self.taxon = taxon
     self.rank = rank
     self.score = float(score)
-
-  #def children(self):
-  #  ret = []
-  #  for c in self.child:
-  #    ret.append(c.taxon)
-  #  return ret
+    self.count = int(count)
 
 def printLevel(f, n, level, cutoff):
   '''
   Print results (recursively).
   '''
-  if n.score >= cutoff:
+  if n.count >= cutoff:
     f.write('%6.2f\t' % n.score + '  ' * level \
       + n.taxon + '\n')
   for m in n.child:
@@ -93,9 +89,9 @@ def loadScores(f):
   '''
   rank = 'DKPCOFGS'
   unclass = 0.0  # 'unclassified' score
-  root = Node('root', 'X', -1)
+  root = Node('root', 'X', -1, -1)
   temp = [root]  # temp copy of hierarchy
-  score = []     # list of scores
+  score = []     # list of scores (read counts)
 
   for line in f:
     spl = line.split('\t')
@@ -106,7 +102,7 @@ def loadScores(f):
           '  unclassified sequences\n']:
         # add special node (for 'other sequences' and
         #   'unclassified sequences'); reset 'temp'
-        n = Node(spl[5].strip(), 'X', spl[0])
+        n = Node(spl[5].strip(), 'X', spl[0], spl[1])
         root.child.append(n)
         temp = temp[:1] + [n]
       continue
@@ -140,13 +136,13 @@ def loadScores(f):
 
     # save to tree
     taxon = spl[5].strip()
-    n = Node(taxon, spl[3], spl[0])
+    n = Node(taxon, spl[3], spl[0], spl[1])
     parent = temp[-1]
     parent.child.append(n)
     temp.append(n)
 
     # save score
-    score.append(float(spl[0]))
+    score.append(int(spl[1]))
 
   return unclass, root, score
 
