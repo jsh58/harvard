@@ -58,7 +58,8 @@ class Node:
 
 def printLevel(f, n, level, cutoff):
   '''
-  Print results (recursively).
+  Print results for a node (if its count meets cutoff).
+    Continue printing for children nodes (recursively).
   '''
   if n.count >= cutoff:
     f.write('%6.2f\t' % n.score + '  ' * level \
@@ -109,6 +110,10 @@ def loadScores(f, d):
 
   for line in f:
     spl = line.split('\t')
+    if len(spl) < 6:
+      sys.stderr.write('Error! Improperly formatted ' \
+        + 'centrifuge-kreport file\n')
+      sys.exit(-1)
 
     # skip non-canonical levels
     if spl[3] == '-':
