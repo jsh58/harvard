@@ -46,39 +46,55 @@ def parseFasta(fIn, fOut, minLen, headers):
   Parse fasta file, write output on the fly.
   '''
   count = short = pureNs = xReads = 0
-  head = ''  # header (1st space-delim token)
-  read = ''  # full read (header + sequence)
-  seq = ''   # sequence (no newlines)
+  head = ''    # header (1st space-delim token)
+  read = ''    # full read (header + sequence)
+  nseq = True  # sequence is pure Ns
+  length = 0   # length of sequence
+
+  # analyze fasta reads
   for line in fIn:
     if line[0] == '>':
-      if seq:
+
+      # process previous read
+      if read:
         count += 1
-        if len(seq) < minLen:
+        if length < minLen:
           short += 1
-        elif seq == 'N' * len(seq):
+        elif nseq:
           pureNs += 1
         elif head in headers:
           xReads += 1
         else:
           fOut.write(read)
-        seq = ''
+
+      # start new read
       read = line
       head = line.split(' ')[0][1:]
+      length = 0
+      nseq = True
+
     elif read:
+      # save sequence
       read += line
-      seq += line.rstrip()
+      length += len(line) - 1
+      if line.rstrip() != 'N' * (len(line) - 1):
+        nseq = False
+
   if fIn != sys.stdin:
     fIn.close()
-  if seq:
+
+  # process last read
+  if read:
     count += 1
-    if len(seq) < minLen:
+    if length < minLen:
       short += 1
-    elif seq == 'N' * len(seq):
+    elif nseq:
       pureNs += 1
     elif head in headers:
       xReads += 1
     else:
       fOut.write(read)
+
   return count, short, pureNs, xReads
 
 def main():
@@ -108,7 +124,7 @@ def main():
   sys.stderr.write('Total fasta sequences in %s: %d\n' % (args[0], count))
   sys.stderr.write('  Shorter than %dbp: %d\n' % (minLen, short))
   sys.stderr.write('  Pure Ns: %d\n' % pureNs)
-  sys.stderr.write('  Excluded : %d\n' % xReads)
+  sys.stderr.write('  Excluded: %d\n' % xReads)
   sys.stderr.write('  Written to %s: ' % args[1] \
     + '%d\n' % (count - short - pureNs - xReads))
 
