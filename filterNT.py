@@ -45,7 +45,7 @@ def parseFasta(fIn, fOut, minLen, headers):
   '''
   Parse fasta file, write output on the fly.
   '''
-  count = short = pureNs = xReads = 0
+  count = short = pureNs = xReads = total = 0
   head = ''    # header (1st space-delim token)
   read = ''    # full read (header + sequence)
   nseq = True  # sequence is pure Ns
@@ -66,6 +66,7 @@ def parseFasta(fIn, fOut, minLen, headers):
           xReads += 1
         else:
           fOut.write(read)
+          total += 1
 
       # start new read
       read = line
@@ -94,8 +95,12 @@ def parseFasta(fIn, fOut, minLen, headers):
       xReads += 1
     else:
       fOut.write(read)
+      total += 1
 
-  return count, short, pureNs, xReads
+  if fOut != sys.stdout:
+    fOut.close()
+
+  return count, short, pureNs, xReads, total
 
 def main():
   '''Main.'''
@@ -107,11 +112,14 @@ def main():
     sys.stderr.write('  <headers>   File of read headers to ignore\n')
     sys.exit(-1)
 
+  # get CL args
   fIn = openRead(args[0])
   fOut = openWrite(args[1])
   minLen = 25
   if len(args) > 2:
     minLen = int(args[2])
+
+  # load headers of seqs to exclude
   headers = []
   if len(args) > 3:
     fRead = openRead(args[3])
@@ -119,14 +127,14 @@ def main():
       headers.append(line.rstrip())
 
   # parse fasta
-  count, short, pureNs, xReads = parseFasta(fIn, fOut, minLen, headers)
+  count, short, pureNs, xReads, total \
+    = parseFasta(fIn, fOut, minLen, headers)
 
   sys.stderr.write('Total fasta sequences in %s: %d\n' % (args[0], count))
   sys.stderr.write('  Shorter than %dbp: %d\n' % (minLen, short))
   sys.stderr.write('  Pure Ns: %d\n' % pureNs)
   sys.stderr.write('  Excluded: %d\n' % xReads)
-  sys.stderr.write('  Written to %s: ' % args[1] \
-    + '%d\n' % (count - short - pureNs - xReads))
+  sys.stderr.write('  Written to %s: %d\n' % (args[1], total))
 
 if __name__ == '__main__':
   main()
