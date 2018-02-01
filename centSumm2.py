@@ -57,17 +57,17 @@ class Node:
     self.score = float(score)
     self.count = int(count)
 
-def printFooter(f, version, date):
+def printFooter(f, num, version, date):
   '''
   Print centrifuge/nt info, etc. for the output.
   '''
-  f.write('<p>\nResults produced by ' \
+  f.write('<p>\nTop %d taxa, produced by ' % num \
     + '<a href="http://www.ccb.jhu.edu/software/centrifuge/manual.shtml">' \
     + 'Centrifuge</a>')
   if version:
     f.write(' (version %s)' % version)
   f.write(', querying the NCBI ' \
-    + '<a href="https://www.ncbi.nlm.nih.gov/nucleotide>nt</a> database')
+    + '<a href="https://www.ncbi.nlm.nih.gov/nucleotide">nt</a> database')
   if date:
     f.write(' (downloaded %s)' % date)
   f.write('.</p>\n')
@@ -79,13 +79,13 @@ def printLevel(f, n, level, cutoff):
   '''
   if n.count >= cutoff:  # or level == 0: # to include all children of root
     f.write('  <tr>\n' \
-      + '    <td>%.2f</td>\n' % n.score \
+      + '    <td align="right">%.2f&emsp;</td>\n' % n.score \
       + '    <td>%s%s</td>\n' % (level * 2 * '&emsp;', n.name) \
       + '  </tr>\n')
   for m in n.child:
     printLevel(f, m, level + 1, cutoff)
 
-def printOutput(f, unclass, root, cutoff, version, date):
+def printOutput(f, unclass, root, num, cutoff, version, date):
   '''
   Begin printing results (header and unclassified).
     Start recursive tree printing.
@@ -93,12 +93,12 @@ def printOutput(f, unclass, root, cutoff, version, date):
   f.write('''<h2>Taxonomy Analysis</h2>
 <table style="width:100%;border:1px solid;">
   <tr>
-    <th align="left" width=10%>Percent</th>
+    <th align="right" width=10%>Percent&emsp;</th>
     <th align="left">Taxon</th>
   </tr>
 ''')
   f.write('  <tr>\n' \
-    + '    <td>%.2f</td>\n' % unclass \
+    + '    <td align="right">%.2f&emsp;</td>\n' % unclass \
     + '    <td>unclassified</td>\n' \
     + '  </tr>\n')
 
@@ -107,7 +107,7 @@ def printOutput(f, unclass, root, cutoff, version, date):
     printLevel(f, n, 0, cutoff)
   f.write('</table>\n')
 
-  printFooter(f, version, date)
+  printFooter(f, num, version, date)
 
 def findCutoff(score, x):
   '''
@@ -276,7 +276,7 @@ def main():
 
   # print output
   fOut = openWrite(args[2])
-  printOutput(fOut, unclass, root, cutoff, version, date)
+  printOutput(fOut, unclass, root, num, cutoff, version, date)
   if fOut != sys.stdout:
     fOut.close()
 
