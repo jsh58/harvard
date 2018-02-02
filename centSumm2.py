@@ -61,7 +61,7 @@ def printFooter(f, num, version, date):
   '''
   Print centrifuge/nt info, etc. for the output.
   '''
-  f.write('<p>\nTop %d taxa, produced by ' % num \
+  f.write('<p>Top %d taxa, identified by ' % num \
     + '<a href="http://www.ccb.jhu.edu/software/centrifuge/manual.shtml">' \
     + 'Centrifuge</a>')
   if version:
@@ -71,6 +71,25 @@ def printFooter(f, num, version, date):
   if date:
     f.write(' (downloaded %s)' % date)
   f.write('.</p>\n')
+  f.write('''<p>The value for a given taxon is the percent of all the
+  sequence reads assigned to that taxon <strong>or</strong> any lower
+  node in its tree.</p>
+<h4>Caveats:</h4>
+<ul>
+  <li>Some sequences in the nt database are contaminated.  For example,
+    reads with untrimmed Illumina adapters may be assigned to sundry taxa
+    (e.g. <strong><i>Cyprinus carpio</i></strong> [in class Actinopteri],
+    <strong><i>Eimeria mitis</i></strong> [in phylum Apicomplexa])
+    because of the contaminating adapter sequences.</li>
+  <p>
+  <li>The "unclassified" category includes both reads that did not match
+    anything in the nt database, plus those that matched a sequence with
+    an unspecified or unknown taxonomy.</li>
+  <p>
+  <li>Reads mapping to multiple taxa are counted as a fractional portion
+    to each taxon, rather than to the lowest common ancestor (LCA).</li>
+</ul>
+''')
 
 def printLevel(f, n, level, cutoff):
   '''
@@ -91,6 +110,9 @@ def printOutput(f, unclass, root, num, cutoff, version, date):
     Start recursive tree printing.
   '''
   f.write('''<h2>Taxonomy Analysis</h2>
+<strong><font color="red" size="4">Warning:</font></strong>
+<font size="4"> experimental software; not suitable for publication</font>
+<p>
 <table style="width:100%;border:1px solid;">
   <tr>
     <th align="right" width=10%>Percent&emsp;</th>
