@@ -88,6 +88,13 @@ def printFooter(f, num, version, date):
   <p>
   <li>Reads mapping to multiple taxa are counted as a fractional portion
     to each taxon, rather than to the lowest common ancestor (LCA).</li>
+  <p>
+  <li>The depiction of the results above is based on the major levels
+    (DKPCOFGS) in the NCBI's
+    <a href="https://www.ncbi.nlm.nih.gov/taxonomy">taxonomy</a>
+    tree.  Some branches in that tree skip a major level; hence, the
+    columns in the above table should not be interpreted as
+    corresponding to a specific taxonomic level.</li>
 </ul>
 ''')
 
@@ -205,7 +212,10 @@ def loadScores(f, d):
       continue
 
     # save to tree
-    n = Node(parent, spl[5].strip(), spl[4], spl[0], spl[1])
+    name = spl[5].strip()
+    if spl[3] in 'GS':
+      name = '<i>' + name + '</i>'  # italicize genus/species
+    n = Node(parent, name, spl[4], spl[0], spl[1])
     parent.child.append(n)
     temp = n
 
