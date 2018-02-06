@@ -79,15 +79,21 @@ def printFooter(f, num, version, date):
   <li>Some sequences in the nt database are contaminated.  For example,
     reads with untrimmed Illumina adapters may be assigned to sundry taxa
     (e.g. <strong><i>Cyprinus carpio</i></strong> [in class Actinopteri],
-    <strong><i>Eimeria mitis</i></strong> [in phylum Apicomplexa])
-    because of the contaminating adapter sequences.</li>
+    <strong><i>Eimeria mitis</i></strong> [in phylum Apicomplexa],
+    <strong><i>Ralstonia solanacearum</i></strong> [in class
+    Betaproteobacteria]) because of the contaminating adapter
+    sequences.</li>
+  <p>
+  <li>Reads derived from one organism may align equally well to other
+    related organisms, especially those well-represented in the nt database.
+    For example, reads from a sequencing run of a <i>Homo sapiens</i> sample
+    may align to <i>Pan</i> or even <i>Mus</i>. Reads that map to multiple
+    taxa are counted as a fractional portion to each taxon, rather than to
+    the lowest common ancestor (LCA).</li>
   <p>
   <li>The "unclassified" category includes both reads that did not match
     anything in the nt database, plus those that matched a sequence with
     an unspecified or unknown taxonomy.</li>
-  <p>
-  <li>Reads mapping to multiple taxa are counted as a fractional portion
-    to each taxon, rather than to the lowest common ancestor (LCA).</li>
   <p>
   <li>The depiction of the results above is based on the major levels
     (DKPCOFGS) in the NCBI's
