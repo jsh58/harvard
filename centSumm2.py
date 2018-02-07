@@ -2,8 +2,8 @@
 
 # JMG 1/2018
 
-# Producing a summary from centifuge's kraken-style report.
-# Version 2: html output
+# Producing an html summary of the top 20 taxa from
+#   centrifuge's kraken-style report.
 
 import sys
 import gzip
@@ -76,7 +76,7 @@ def printFooter(f, num, version, date):
   node in its tree.</p>
 <h4>Caveats:</h4>
 <ul>
-  <li>Some sequences in the nt database are contaminated.  For example,
+  <li>Some sequences in the nt database are contaminated. For example,
     reads with untrimmed Illumina adapters may be assigned to sundry taxa
     (e.g. <strong><i>Cyprinus carpio</i></strong> [in class Actinopteri],
     <strong><i>Eimeria mitis</i></strong> [in phylum Apicomplexa],
@@ -98,10 +98,12 @@ def printFooter(f, num, version, date):
   <li>The depiction of the results above is based on the major levels
     (DKPCOFGS) in the NCBI's
     <a href="https://www.ncbi.nlm.nih.gov/taxonomy">taxonomy</a>
-    tree.  Some branches in that tree skip a major level; hence, the
+    tree. Some branches in that tree skip a major level; hence, the
     columns in the above table should not be interpreted as
     corresponding to a specific taxonomic level.</li>
 </ul>
+<p>Questions/concerns/comments/suggestions?
+<a href="mailto:jgaspar@fas.harvard.edu">Please let us know.</a></p>
 ''')
 
 def printLevel(f, n, level, cutoff):

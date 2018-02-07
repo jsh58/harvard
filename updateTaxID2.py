@@ -43,7 +43,8 @@ def openWrite(filename):
 def main():
   args = sys.argv[1:]
   if len(args) < 4:
-    sys.stderr.write('Usage: python updateTaxID.py  <mergedIDs>  <deletedIDs>  <out>  [<in>]+\n')
+    sys.stderr.write('Usage: python updateTaxID2.py  <mergedIDs>  ' \
+      + '<deletedIDs>  <out>  [<in>]+\n')
     sys.exit(-1)
 
   # load merged taxIDs to dict

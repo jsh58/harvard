@@ -2,7 +2,7 @@
 
 # JMG 1/2018
 
-# Producing a summary from centifuge's kraken-style report.
+# Producing a summary from centrifuge's kraken-style report.
 
 import sys
 import gzip

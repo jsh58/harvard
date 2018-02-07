@@ -1,8 +1,13 @@
 #!/usr/bin/python
 
 # JMG 12/2017
-# Removing sequences of pure Ns or shorter than a specified length
-#   e.g. from the NCBI nt database.
+
+# Filter a fasta file (e.g. the NCBI nt database):
+#   - remove sequences of pure Ns
+#   - remove sequences shorter than a specified
+#       length (def. 25bp)
+#   - remove sequences whose headers are in a
+#       given list
 
 import sys
 import gzip
@@ -109,7 +114,7 @@ def main():
     sys.stderr.write('Usage: python filterNT.py  <input>  ' \
       + '<output>  [<minLen>]  [<headers]\n')
     sys.stderr.write('  <minLen>    Minimum sequence length (def. 25bp)\n')
-    sys.stderr.write('  <headers>   File of read headers to ignore\n')
+    sys.stderr.write('  <headers>   File listing headers of sequences to exclude\n')
     sys.exit(-1)
 
   # get CL args
