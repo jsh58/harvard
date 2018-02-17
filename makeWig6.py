@@ -71,12 +71,16 @@ def parseFiles(fIn, fOut, d, window):
 
     if spl[0] != chrom:
       # process previous interval
-      if end:
+      while end and end < d[chrom]:
         if not pos:
           value = 'NA'
         else:
           value /= pos
         fOut.write('\t'.join(map(str, [chrom, start, end, value])) + '\n')
+        start = end
+        end = min(start + window, d[chrom])
+        pos = 0
+        value = 0.0
 
       # start new chromosome
       chrom = spl[0]
@@ -94,7 +98,7 @@ def parseFiles(fIn, fOut, d, window):
     for i in range(int(spl[1]), int(spl[2])):
 
       # process interval
-      if i >= end:
+      while i >= end:
         if not pos:
           value = 'NA'
         else:
@@ -111,12 +115,16 @@ def parseFiles(fIn, fOut, d, window):
       value += float(spl[3])
 
   # process last interval
-  if end:
+  while end and end < d[chrom]:
     if not pos:
       value = 'NA'
     else:
       value /= pos
     fOut.write('\t'.join(map(str, [chrom, start, end, value])) + '\n')
+    start = end
+    end = min(start + window, d[chrom])
+    pos = 0
+    value = 0.0
 
 def main():
   '''Main.'''
