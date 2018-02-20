@@ -70,8 +70,8 @@ def parseFiles(fIn, fOut, d, window):
       sys.exit(-1)
 
     if spl[0] != chrom:
-      # process previous interval
-      while end and end < d[chrom]:
+      # process last interval(s) from previous chrom
+      while end and start < d[chrom]:
         if not pos:
           value = 'NA'
         else:
@@ -80,19 +80,25 @@ def parseFiles(fIn, fOut, d, window):
         start = end
         end = min(start + window, d[chrom])
         pos = 0
-        value = 0.0
+      if chrom in d:
+        del d[chrom]
 
       # start new chromosome
       chrom = spl[0]
-      start = int(spl[1])
-      end = min(start + window, d[chrom])
       pos = 0
       value = 0.0
-
       if chrom not in d:
         sys.stderr.write('Error! Chromosome %s not in chrom.size file\n' % chrom)
         sys.stderr.write('  (or, input bedGraph not sorted)\n')
         sys.exit(-1)
+
+      # print empty intervals at beginning
+      start = 0
+      end = min(start + window, d[chrom])
+      while start < d[chrom] and end < int(spl[1]):
+        fOut.write('\t'.join(map(str, [chrom, start, end, 'NA'])) + '\n')
+        start = end
+        end = min(start + window, d[chrom])
 
     # load values from bed interval
     for i in range(int(spl[1]), int(spl[2])):
@@ -115,7 +121,7 @@ def parseFiles(fIn, fOut, d, window):
       value += float(spl[3])
 
   # process last interval
-  while end and end < d[chrom]:
+  while end and start < d[chrom]:
     if not pos:
       value = 'NA'
     else:
@@ -124,14 +130,15 @@ def parseFiles(fIn, fOut, d, window):
     start = end
     end = min(start + window, d[chrom])
     pos = 0
-    value = 0.0
 
 def main():
   '''Main.'''
   args = sys.argv[1:]
   if len(args) < 4:
     sys.stderr.write('Usage: python %s  <BGin>  ' % sys.argv[0] \
-      + '<chrom.size>  <windowSize>  <BGout>\n')
+      + '<chrom.size>  <windowSize>  <BGout>\n' \
+      + '  <chrom.size>  File listing chromosome names and lengths\n' \
+      + '                  (one per line, tab-separated)\n')
     sys.exit(-1)
 
   # load chromosome sizes
@@ -139,6 +146,9 @@ def main():
   chrom = loadChromSizes(fChr)
 
   window = int(args[2])
+  if window <= 0:
+    sys.stderr.write('Error! Window size must be > 0\n')
+    sys.exit(-1)
   fIn = openRead(args[0])
   fOut = openWrite(args[3])
 
