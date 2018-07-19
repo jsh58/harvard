@@ -93,10 +93,12 @@ def loadAcc(f):
   d = {}
   for line in f:
     spl = line.rstrip().split('\t')
-    if len(spl) < 4:
+    if len(spl) < 4:    # for raw accession2taxid.gz file
+    #if len(spl) < 2:    # for filtered/updated acc2taxid file
       sys.stderr.write('Error! Improperly formatted acc2taxid file\n')
       sys.exit(-1)
-    d[spl[1]] = spl[2]
+    d[spl[1]] = spl[2]  # for raw accession2taxid.gz file
+    #d[spl[0]] = spl[1]  # for filtered/updated acc2taxid file
   return d
 
 def findTaxa(f, taxon):
