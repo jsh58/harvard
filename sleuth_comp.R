@@ -33,7 +33,6 @@ so <- sleuth_fit(so, ~condition, 'full')
 so <- sleuth_fit(so, ~1, 'reduced')
 so <- sleuth_lrt(so, 'reduced', 'full')
 sleuth.res <- sleuth_results(so, 'reduced:full', 'lrt')
-#sleuth.sig <- subset(sleuth.res, qval <= 0.05)
 
 # SE analysis
 cat('SE:', length.se, '\n')
@@ -45,7 +44,6 @@ so.se <- sleuth_fit(so.se, ~condition, 'full')
 so.se <- sleuth_fit(so.se, ~1, 'reduced')
 so.se <- sleuth_lrt(so.se, 'reduced', 'full')
 sleuth.res.se <- sleuth_results(so.se, 'reduced:full', 'lrt')
-#sleuth.sig.se <- subset(sleuth.res.se, qval <= 0.05)
 
 # PE analysis
 cat('PE:', length.pe, '\n')
@@ -57,12 +55,31 @@ so.pe <- sleuth_fit(so.pe, ~condition, 'full')
 so.pe <- sleuth_fit(so.pe, ~1, 'reduced')
 so.pe <- sleuth_lrt(so.pe, 'reduced', 'full')
 sleuth.res.pe <- sleuth_results(so.pe, 'reduced:full', 'lrt')
-#sleuth.sig.pe <- subset(sleuth.res.pe, qval <= 0.05)
 
 # compare full to SE
+pval <- 0.05
 merge.se <- merge(sleuth.res[, 1:2], sleuth.res.se[, 1:2], by='target_id')
-table(merge.se$pval.x < 0.05, merge.se$pval.y < 0.05)
+merge.se <- subset(merge.se, ! is.na(merge.se$pval.x) & ! is.na(merge.se$pval.y))
+# piecemeal, but cleaner than using table() in case of 0s
+tp.se <- sum(merge.se$pval.x < pval & merge.se$pval.y < pval)
+fp.se <- sum(merge.se$pval.x >= pval & merge.se$pval.y < pval)
+tn.se <- sum(merge.se$pval.x >= pval & merge.se$pval.y >= pval)
+fn.se <- sum(merge.se$pval.x < pval & merge.se$pval.y >= pval)
+cat('SE', length.se, 'vs. full\n')
+cat('  TPR:', ifelse(tp.se + fn.se > 0, tp.se/(tp.se + fn.se), 'n/a'), '\n')
+cat('  FPR:', ifelse(fp.se + tn.se > 0, fp.se/(fp.se + tn.se), 'n/a'), '\n')
+cat('  recall:', ifelse(tp.se + fn.se > 0, tp.se/(tp.se + fn.se), 'n/a'), '\n')
+cat('  precision:', ifelse(tp.se + fp.se > 0, tp.se/(tp.se + fp.se), 'n/a'), '\n')
 
 # compare full to PE
 merge.pe <- merge(sleuth.res[, 1:2], sleuth.res.pe[, 1:2], by='target_id')
-table(merge.pe$pval.x < 0.05, merge.pe$pval.y < 0.05)
+merge.pe <- subset(merge.pe, ! is.na(merge.pe$pval.x) & ! is.na(merge.pe$pval.y))
+tp.pe <- sum(merge.pe$pval.x < pval & merge.pe$pval.y < pval)
+fp.pe <- sum(merge.pe$pval.x >= pval & merge.pe$pval.y < pval)
+tn.pe <- sum(merge.pe$pval.x >= pval & merge.pe$pval.y >= pval)
+fn.pe <- sum(merge.pe$pval.x < pval & merge.pe$pval.y >= pval)
+cat('PE', length.pe, 'vs. full\n')
+cat('  TPR:', ifelse(tp.pe + fn.pe > 0, tp.pe/(tp.pe + fn.pe), 'n/a'), '\n')
+cat('  FPR:', ifelse(fp.pe + tn.pe > 0, fp.pe/(fp.pe + tn.pe), 'n/a'), '\n')
+cat('  recall:', ifelse(tp.pe + fn.pe > 0, tp.pe/(tp.pe + fn.pe), 'n/a'), '\n')
+cat('  precision:', ifelse(tp.pe + fp.pe > 0, tp.pe/(tp.pe + fp.pe), 'n/a'), '\n')
